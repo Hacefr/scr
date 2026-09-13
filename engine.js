@@ -1,5 +1,5 @@
 /**
- * engine.js (Tuned Speed, Opponent Receptor Sync & Live 1v1 HUD)
+ * engine.js (Added "3, 2, 1, GO!" Countdown & Opponent Sync)
  * Save in ROOT folder
  */
 
@@ -41,9 +41,13 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Game Mode & Role: 'bf' (Player 1) or 'limes' (Player 2)
     this.gameMode = 'single';
     this.playerRole = 'bf';
+
+    // Countdown State (seconds remaining)
+    this.countdownTimer = 0;
+    this.countdownText = "";
+    this.countdownColor = "#FFFFFF";
 
     // Local Keys & Stats
     this.keysHeld = [false, false, false, false];
@@ -55,16 +59,15 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Opponent Live Tracking (Multiplayer)
+    // Opponent Live Tracking
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
-    this.opponentKeyTimers = [0, 0, 0, 0]; // Receptor flash timers
+    this.opponentKeyTimers = [0, 0, 0, 0];
 
     // Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
 
-    // Multiplayer Hook
     this.onNoteHitCallback = null;
 
     this.state = 'LOADING';
@@ -124,14 +127,18 @@ export class RhythmEngine {
     }
   }
 
-  async start(startTimeInSeconds = null) {
+  /**
+   * Starts playback with an animated 3-2-1-GO countdown
+   */
+  async startWithCountdown(delaySeconds = 2.4, targetAudioTime = null) {
     await this.audio.initContext();
-    this.state = 'PLAYING';
-    if (startTimeInSeconds) {
-      this.audio.playAt(startTimeInSeconds);
-    } else {
-      this.audio.playNow();
-    }
+    this.state = 'COUNTDOWN';
+    this.countdownTimer = delaySeconds;
+
+    const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
+
+    // Schedule audio playback ahead of time for sample-accurate sync
+    this.audio.playAt(scheduledTime);
   }
 
   handleKeyPress(lane) {
@@ -192,23 +199,18 @@ export class RhythmEngine {
     this.updateAccuracy();
   }
 
-  /**
-   * Called when network packet arrives showing opponent hit a note
-   */
   handleOpponentNoteHit(data) {
-    const { lane, rating, score, accuracy } = data;
+    const { lane, score, accuracy } = data;
     this.opponentScore = score || 0;
     this.opponentAccuracy = accuracy || 100.0;
-    this.opponentKeyTimers[lane] = 0.18; // Flash opponent receptor for 180ms
+    this.opponentKeyTimers[lane] = 0.18;
 
-    // Trigger opponent dance pose
     if (this.playerRole === 'bf') {
       this.limesPoseTimer = 0.3;
     } else {
       this.bfPoseTimer = 0.3;
     }
 
-    // Pop the opponent's note off screen
     const targetIsPlayer = (this.playerRole !== 'bf');
     this.pool.forEachActive(note => {
       if (note.isPlayer === targetIsPlayer && note.lane === lane && !note.hit) {
@@ -226,7 +228,28 @@ export class RhythmEngine {
   }
 
   update(dt) {
-    if (this.state !== 'PLAYING') return;
+    // 1. Update Countdown
+    if (this.state === 'COUNTDOWN') {
+      this.countdownTimer -= dt;
+
+      if (this.countdownTimer > 1.8) {
+        this.countdownText = "3";
+        this.countdownColor = "#F9393F"; // Red
+      } else if (this.countdownTimer > 1.2) {
+        this.countdownText = "2";
+        this.countdownColor = "#FFAA00"; // Orange
+      } else if (this.countdownTimer > 0.6) {
+        this.countdownText = "1";
+        this.countdownColor = "#FFDD00"; // Yellow
+      } else if (this.countdownTimer > 0.0) {
+        this.countdownText = "GO!";
+        this.countdownColor = "#12FA05"; // Green
+      } else {
+        this.state = 'PLAYING';
+      }
+    }
+
+    if (this.state !== 'PLAYING' && this.state !== 'COUNTDOWN') return;
 
     const songTime = this.audio.getCurrentSongTime();
 
@@ -235,7 +258,6 @@ export class RhythmEngine {
       return;
     }
 
-    // Spawn Window calibrated for comfortable scroll
     const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -253,13 +275,11 @@ export class RhythmEngine {
     const humanIsPlayer = (this.playerRole === 'bf');
 
     this.pool.forEachActive(note => {
-      // 160 pixels/sec multiplier creates a smooth, comfortable reaction pace
       const distance = (note.strumTime - songTime) * (160 * this.speed);
       note.y = this.receptorY + distance;
 
       const isBotNote = (note.isPlayer !== humanIsPlayer);
 
-      // Singleplayer Botplay
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.isPlayer) {
@@ -272,7 +292,6 @@ export class RhythmEngine {
         note.kill();
       }
 
-      // Check human misses
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -284,7 +303,6 @@ export class RhythmEngine {
       }
     });
 
-    // Pose and flash timers
     if (this.bfPoseTimer > 0) this.bfPoseTimer -= dt;
     if (this.limesPoseTimer > 0) this.limesPoseTimer -= dt;
     for (let i = 0; i < 4; i++) {
@@ -307,16 +325,14 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // Draw Receptors (With Opponent Flash Lighting!)
+    // Draw Receptors
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
 
-      // Left Receptors (Limes)
       const limesActive = isLimesHuman ? this.keysHeld[i] : (this.opponentKeyTimers[i] > 0);
       this.drawArrow(ctx, oppBaseX + i * this.laneWidth, this.receptorY, i, true, limesActive);
 
-      // Right Receptors (Boyfriend)
       const bfActive = isBfHuman ? this.keysHeld[i] : (this.opponentKeyTimers[i] > 0);
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
@@ -330,6 +346,18 @@ export class RhythmEngine {
 
     this.renderCharacters(ctx);
     this.renderHUD(ctx);
+
+    // Render Countdown Overlay
+    if (this.state === 'COUNTDOWN') {
+      ctx.save();
+      ctx.font = 'bold 82px sans-serif';
+      ctx.fillStyle = this.countdownColor;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 12;
+      ctx.fillText(this.countdownText, this.width / 2, this.height / 2);
+      ctx.restore();
+    }
   }
 
   drawArrow(ctx, x, y, direction, isReceptor, isPressed) {
@@ -386,7 +414,6 @@ export class RhythmEngine {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 15px monospace';
 
-    // Live 1v1 Split Screen Score Tracker
     if (this.gameMode === 'multiplayer') {
       const youLead = this.score >= this.opponentScore;
       ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
