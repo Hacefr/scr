@@ -1,5 +1,6 @@
 /**
- * server/server.js (Host Song Selection & Custom Skin Network Relay)
+ * server/server.js
+ * Full Relay Server with NTP Clock Sync, Handshake Gate, and Forfeit Winner Logic
  */
 
 const express = require('express');
@@ -17,7 +18,7 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: 2e6 // 2 MB buffer for pixel art skin transfers
+  maxHttpBufferSize: 2e6
 });
 
 const rooms = new Map();
@@ -25,6 +26,15 @@ const rooms = new Map();
 io.on('connection', (socket) => {
   let currentRoom = null;
 
+  // 1. NTP Time Sync Ping-Pong
+  socket.on('sync_ping', (clientSendTime) => {
+    socket.emit('sync_pong', {
+      clientSendTime: clientSendTime,
+      serverTime: Date.now()
+    });
+  });
+
+  // 2. Join Room
   socket.on('join_room', ({ roomCode, preferredRole, customSkin }) => {
     roomCode = roomCode.trim().toUpperCase();
 
@@ -34,7 +44,8 @@ io.on('connection', (socket) => {
         players: [],
         status: 'lobby',
         disconnectTimer: null,
-        settings: { ghostTapping: true, selectedSongId: 'stargazer' }
+        settings: { ghostTapping: true, selectedSongId: 'stargazer' },
+        syncReadyCount: 0
       });
     }
 
@@ -71,7 +82,6 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('opponent_reconnected');
     }
 
-    // Notify room of players & sync existing skins
     io.to(roomCode).emit('room_update', {
       players: room.players,
       status: room.status,
@@ -79,27 +89,23 @@ io.on('connection', (socket) => {
       hostId: room.players[0].id
     });
 
-    // If opponent already had a skin, send to newly joined player
     if (otherPlayer && otherPlayer.skin) {
       socket.emit('opponent_skin', otherPlayer.skin);
     }
-    // If new player has skin, send to other player
     if (playerObj.skin && otherPlayer) {
       socket.to(roomCode).emit('opponent_skin', playerObj.skin);
     }
   });
 
-  // Host-only Settings & Song Chooser Update
   socket.on('update_room_settings', (newSettings) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
-    if (!room || room.players[0]?.id !== socket.id) return; // Host only
+    if (!room || room.players[0]?.id !== socket.id) return;
 
     room.settings = { ...room.settings, ...newSettings };
     io.to(currentRoom).emit('room_settings_update', room.settings);
   });
 
-  // Skin Broadcast
   socket.on('player_skin', (skinData) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
@@ -144,9 +150,7 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'lobby') return;
 
     const player = room.players.find(p => p.id === socket.id);
-    if (player) {
-      player.ready = !player.ready;
-    }
+    if (player) player.ready = !player.ready;
 
     io.to(currentRoom).emit('room_update', {
       players: room.players,
@@ -156,12 +160,26 @@ io.on('connection', (socket) => {
     });
 
     if (room.players.length === 2 && room.players.every(p => p.ready)) {
+      room.syncReadyCount = 0;
+      io.to(currentRoom).emit('handshake_check');
+    }
+  });
+
+  socket.on('handshake_ack', () => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+
+    room.syncReadyCount = (room.syncReadyCount || 0) + 1;
+
+    if (room.syncReadyCount >= 2) {
       room.status = 'playing';
-      const startTimestamp = Date.now() + 2500;
+      const startTimestamp = Date.now() + 3000;
 
       io.to(currentRoom).emit('match_starting', {
         startTimestamp: startTimestamp,
-        countdownMs: 2500,
+        serverNow: Date.now(),
+        countdownMs: 3000,
         settings: room.settings
       });
     }
@@ -184,7 +202,8 @@ io.on('connection', (socket) => {
       player.finished = true;
     }
 
-    if (room.players.every(p => p.finished)) {
+    // If both players have finished, declare winner
+    if (room.players.length === 2 && room.players.every(p => p.finished)) {
       room.status = 'finished';
       const [p1, p2] = room.players;
       let winnerId = null;
@@ -194,6 +213,10 @@ io.on('connection', (socket) => {
       else winnerId = 'tie';
 
       io.to(currentRoom).emit('match_results', { winnerId, players: room.players });
+    } else if (room.players.length === 1) {
+      // Solo remaining player finishes
+      room.status = 'finished';
+      io.to(currentRoom).emit('match_results', { winnerId: socket.id, players: room.players });
     }
   });
 
@@ -212,10 +235,16 @@ io.on('connection', (socket) => {
 
     if (room.status === 'playing') {
       io.to(currentRoom).emit('opponent_disconnected', { gracePeriodSeconds: 30 });
+
       room.disconnectTimer = setTimeout(() => {
-        io.to(currentRoom).emit('opponent_forfeited', {
-          message: 'Opponent did not reconnect within 30 seconds. You win by forfeit!'
-        });
+        const remainingPlayer = room.players[0];
+        if (remainingPlayer) {
+          io.to(currentRoom).emit('match_results', {
+            winnerId: remainingPlayer.id,
+            players: room.players,
+            forfeit: true
+          });
+        }
         rooms.delete(currentRoom);
       }, 30000);
     } else {
