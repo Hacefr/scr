@@ -1,5 +1,5 @@
 /**
- * engine.js (Dynamic Song Loader & Animated Song Credit Card)
+ * engine.js (Taunt System, Miss Poses, Fit-To-Frame Scaling & Mirroring)
  * Save in ROOT folder
  */
 
@@ -41,13 +41,9 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Current Song Info & Credit Pop-up Timer
-    this.currentSong = {
-      name: "Stargazer",
-      artist: "VS Impostor Legacy",
-      color: "#55E840"
-    };
-    this.creditCardTimer = 0; // Counts down from 4.0 seconds
+    // Current Song & Pop-Up Card
+    this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
+    this.creditCardTimer = 0;
 
     this.gameMode = 'single';
     this.playerRole = 'bf';
@@ -71,19 +67,27 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
+    // Pose & Animation States
+    this.bfPoseTimer = 0;
+    this.limesPoseTimer = 0;
+    this.bfMissTimer = 0;
+    this.limesMissTimer = 0;
+    this.bfTauntTimer = 0;
+    this.limesTauntTimer = 0;
+
+    // Manual Mirror Toggle
+    this.mirrorSprite = false;
+
     // Opponent Live Tracking
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
     this.opponentKeyTimers = [0, 0, 0, 0];
 
-    // Pose Timers
-    this.bfPoseTimer = 0;
-    this.limesPoseTimer = 0;
-
     this.onNoteHitCallback = null;
+    this.onTauntCallback = null;
 
-    this.state = 'LOADING';
-    this.loadingStatus = "Initializing...";
+    this.state = 'BOOT';
+    this.loadingStatus = "Ready";
 
     this.setupInputs();
     this.setupTouch();
@@ -96,6 +100,15 @@ export class RhythmEngine {
   setupInputs() {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
+
+      // Keybind T: Taunt
+      if (e.code === 'KeyT') {
+        if (this.state === 'PLAYING' || this.state === 'COUNTDOWN') {
+          this.triggerTaunt();
+        }
+        return;
+      }
+
       const lane = KEY_MAP[e.code];
       if (lane !== undefined) {
         this.keysHeld[lane] = true;
@@ -160,9 +173,26 @@ export class RhythmEngine {
     this.canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
   }
 
-  /**
-   * Loads assets dynamically for any song object from songs.json
-   */
+  triggerTaunt() {
+    if (this.playerRole === 'bf') {
+      this.bfTauntTimer = 0.4;
+    } else {
+      this.limesTauntTimer = 0.4;
+    }
+
+    if (this.onTauntCallback) {
+      this.onTauntCallback({ role: this.playerRole });
+    }
+  }
+
+  handleOpponentTaunt(data) {
+    if (data.role === 'bf') {
+      this.bfTauntTimer = 0.4;
+    } else {
+      this.limesTauntTimer = 0.4;
+    }
+  }
+
   async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
     this.currentSong = songData;
     this.state = 'LOADING';
@@ -186,7 +216,6 @@ export class RhythmEngine {
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
 
-      // Reset states
       this.pool.clear();
       this.spawnIndex = 0;
       this.score = 0;
@@ -213,7 +242,6 @@ export class RhythmEngine {
     const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
     this.audio.playAt(scheduledTime);
 
-    // Trigger 4-second animated song credits pop-up card
     this.creditCardTimer = 4.0;
   }
 
@@ -266,10 +294,17 @@ export class RhythmEngine {
         this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
       }
     } else {
+      // Miss penalty & miss animation trigger
       this.score = Math.max(0, this.score - 50);
       this.combo = 0;
       this.hits.miss++;
       this.lastRating = "MISS";
+
+      if (this.playerRole === 'bf') {
+        this.bfMissTimer = 0.3;
+      } else {
+        this.limesMissTimer = 0.3;
+      }
     }
 
     this.updateAccuracy();
@@ -304,10 +339,7 @@ export class RhythmEngine {
   }
 
   update(dt) {
-    // Credit pop-up timer
-    if (this.creditCardTimer > 0) {
-      this.creditCardTimer -= dt;
-    }
+    if (this.creditCardTimer > 0) this.creditCardTimer -= dt;
 
     if (this.state === 'COUNTDOWN') {
       this.countdownTimer -= dt;
@@ -378,12 +410,19 @@ export class RhythmEngine {
         this.hits.miss++;
         this.score = Math.max(0, this.score - 100);
         this.lastRating = "MISS";
+        if (humanIsPlayer) this.bfMissTimer = 0.3;
+        else this.limesMissTimer = 0.3;
         this.updateAccuracy();
       }
     });
 
+    // Pose and timer tickdowns
     if (this.bfPoseTimer > 0) this.bfPoseTimer -= dt;
     if (this.limesPoseTimer > 0) this.limesPoseTimer -= dt;
+    if (this.bfMissTimer > 0) this.bfMissTimer -= dt;
+    if (this.limesMissTimer > 0) this.limesMissTimer -= dt;
+    if (this.bfTauntTimer > 0) this.bfTauntTimer -= dt;
+    if (this.limesTauntTimer > 0) this.limesTauntTimer -= dt;
     for (let i = 0; i < 4; i++) {
       if (this.opponentKeyTimers[i] > 0) this.opponentKeyTimers[i] -= dt;
     }
@@ -396,7 +435,7 @@ export class RhythmEngine {
     ctx.fillStyle = '#111318';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    if (this.state === 'LOADING' || this.state === 'READY' || this.state === 'ERROR') {
+    if (this.state === 'LOADING' || this.state === 'ERROR') {
       this.renderLoadingScreen(ctx);
       return;
     }
@@ -430,12 +469,10 @@ export class RhythmEngine {
     this.renderCharacters(ctx);
     this.renderHUD(ctx);
 
-    // Draw Animated Song & Author Pop-Up Card
     if (this.creditCardTimer > 0) {
       this.renderSongCreditsCard(ctx);
     }
 
-    // Countdown Overlay
     if (this.state === 'COUNTDOWN') {
       ctx.save();
       ctx.font = 'bold 82px sans-serif';
@@ -448,15 +485,10 @@ export class RhythmEngine {
     }
   }
 
-  /**
-   * Psych Engine Style Animated Song & Author Pop-Up Card
-   */
   renderSongCreditsCard(ctx) {
     ctx.save();
-
-    // Slide in from left during first 0.5s, fade out during last 0.8s
     const progress = 4.0 - this.creditCardTimer;
-    let slideX = Math.min(1, progress * 2.5); // 0.0 -> 1.0
+    let slideX = Math.min(1, progress * 2.5);
     const alpha = this.creditCardTimer < 0.8 ? (this.creditCardTimer / 0.8) : 1.0;
 
     const cardWidth = 260;
@@ -466,18 +498,14 @@ export class RhythmEngine {
     const currentY = 20;
 
     ctx.globalAlpha = alpha;
-
-    // Translucent background
     ctx.fillStyle = 'rgba(10, 12, 16, 0.85)';
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(currentX, currentY, cardWidth, cardHeight, 6) : ctx.rect(currentX, currentY, cardWidth, cardHeight);
     ctx.fill();
 
-    // Colored accent left border
     ctx.fillStyle = this.currentSong.color || '#55E840';
     ctx.fillRect(currentX, currentY, 5, cardHeight);
 
-    // Text details
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 15px sans-serif';
     ctx.fillText(`🎵 ${this.currentSong.name}`, currentX + 16, currentY + 26);
@@ -485,7 +513,6 @@ export class RhythmEngine {
     ctx.fillStyle = '#AAAAAA';
     ctx.font = '12px sans-serif';
     ctx.fillText(`by ${this.currentSong.artist || 'Unknown'}`, currentX + 16, currentY + 48);
-
     ctx.restore();
   }
 
@@ -546,19 +573,42 @@ export class RhythmEngine {
     ctx.restore();
   }
 
+  /**
+   * Character Renderer (Handles Scaling, Floor Anchoring, and Mirroring)
+   */
   renderCharacters(ctx) {
-    const limesPose = this.limesPoseTimer > 0;
-    ctx.fillStyle = limesPose ? '#55E840' : '#2A7A20';
-    ctx.fillRect(120, 320, 100, 140);
+    const groundY = 460;
+    const boxW = 100;
+    const boxH = 140;
+
+    // LEFT: Limes (Faces Right toward BF)
+    ctx.save();
+    ctx.translate(170, groundY); // Center of Limes box
+    if (this.mirrorSprite) ctx.scale(-1, 1);
+
+    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow taunt flash
+    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555'; // Dark miss color
+    else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
+
+    ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), 135, 395);
+    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), -boxW / 2 + 15, -60);
+    ctx.restore();
 
-    const bfPose = this.bfPoseTimer > 0;
-    ctx.fillStyle = bfPose ? '#38A8FF' : '#175294';
-    ctx.fillRect(520, 320, 100, 140);
+    // RIGHT: Boyfriend (Faces Left toward Limes)
+    ctx.save();
+    ctx.translate(570, groundY); // Center of BF box
+    if (!this.mirrorSprite) ctx.scale(-1, 1); // Mirrored by default so BF looks Left!
+
+    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
+    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
+    else ctx.fillStyle = this.bfPoseTimer > 0 ? '#38A8FF' : '#175294';
+
+    ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), 550, 395);
+    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), -boxW / 2 + 25, -60);
+    ctx.restore();
   }
 
   renderHUD(ctx) {
