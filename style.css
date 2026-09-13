@@ -3,7 +3,7 @@
   margin: 0;
   padding: 0;
   user-select: none;
-  touch-action: none; /* Disables double-tap zoom and pull-to-refresh */
+  touch-action: none;
 }
 
 body {
@@ -37,7 +37,7 @@ canvas {
   object-fit: contain;
 }
 
-/* Sleek Fullscreen Toggle Button */
+/* Fullscreen Toggle Button */
 #btn-fullscreen {
   position: absolute;
   top: 12px;
@@ -59,6 +59,21 @@ canvas {
 #btn-fullscreen:hover {
   background: #66fcf1;
   color: #0b0c10;
+}
+
+/* Bottom-Left Version Badge (Psych Engine Style) */
+#version-tag {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-size: 12px;
+  font-family: monospace;
+  color: #888;
+  z-index: 25;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 3px 8px;
+  border-radius: 3px;
 }
 
 /* UI Overlays */
