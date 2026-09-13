@@ -1,6 +1,6 @@
 /**
  * server/server.js
- * Full Relay Server with NTP Clock Sync, Handshake Gate, and Forfeit Winner Logic
+ * Multi-Sample NTP Calibration, Live Ping Relaying & Host-Exit Lobby Termination
  */
 
 const express = require('express');
@@ -26,7 +26,7 @@ const rooms = new Map();
 io.on('connection', (socket) => {
   let currentRoom = null;
 
-  // 1. NTP Time Sync Ping-Pong
+  // High-precision NTP ping
   socket.on('sync_ping', (clientSendTime) => {
     socket.emit('sync_pong', {
       clientSendTime: clientSendTime,
@@ -34,7 +34,12 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 2. Join Room
+  // Relay live ping
+  socket.on('player_ping', (pingVal) => {
+    if (!currentRoom) return;
+    socket.to(currentRoom).emit('opponent_ping', pingVal);
+  });
+
   socket.on('join_room', ({ roomCode, preferredRole, customSkin }) => {
     roomCode = roomCode.trim().toUpperCase();
 
@@ -45,7 +50,8 @@ io.on('connection', (socket) => {
         status: 'lobby',
         disconnectTimer: null,
         settings: { ghostTapping: true, selectedSongId: 'stargazer' },
-        syncReadyCount: 0
+        syncReadyCount: 0,
+        hostId: socket.id
       });
     }
 
@@ -86,7 +92,7 @@ io.on('connection', (socket) => {
       players: room.players,
       status: room.status,
       settings: room.settings,
-      hostId: room.players[0].id
+      hostId: room.hostId
     });
 
     if (otherPlayer && otherPlayer.skin) {
@@ -100,7 +106,7 @@ io.on('connection', (socket) => {
   socket.on('update_room_settings', (newSettings) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
-    if (!room || room.players[0]?.id !== socket.id) return;
+    if (!room || room.hostId !== socket.id) return;
 
     room.settings = { ...room.settings, ...newSettings };
     io.to(currentRoom).emit('room_settings_update', room.settings);
@@ -140,7 +146,7 @@ io.on('connection', (socket) => {
       players: room.players,
       status: room.status,
       settings: room.settings,
-      hostId: room.players[0].id
+      hostId: room.hostId
     });
   });
 
@@ -156,7 +162,7 @@ io.on('connection', (socket) => {
       players: room.players,
       status: room.status,
       settings: room.settings,
-      hostId: room.players[0].id
+      hostId: room.hostId
     });
 
     if (room.players.length === 2 && room.players.every(p => p.ready)) {
@@ -172,14 +178,15 @@ io.on('connection', (socket) => {
 
     room.syncReadyCount = (room.syncReadyCount || 0) + 1;
 
+    // Both clients ready: issue 3200ms countdown runway
     if (room.syncReadyCount >= 2) {
       room.status = 'playing';
-      const startTimestamp = Date.now() + 3000;
+      const startTimestamp = Date.now() + 3200;
 
       io.to(currentRoom).emit('match_starting', {
         startTimestamp: startTimestamp,
         serverNow: Date.now(),
-        countdownMs: 3000,
+        countdownMs: 3200,
         settings: room.settings
       });
     }
@@ -202,7 +209,6 @@ io.on('connection', (socket) => {
       player.finished = true;
     }
 
-    // If both players have finished, declare winner
     if (room.players.length === 2 && room.players.every(p => p.finished)) {
       room.status = 'finished';
       const [p1, p2] = room.players;
@@ -214,7 +220,6 @@ io.on('connection', (socket) => {
 
       io.to(currentRoom).emit('match_results', { winnerId, players: room.players });
     } else if (room.players.length === 1) {
-      // Solo remaining player finishes
       room.status = 'finished';
       io.to(currentRoom).emit('match_results', { winnerId: socket.id, players: room.players });
     }
@@ -224,6 +229,16 @@ io.on('connection', (socket) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
+
+    const isHost = (socket.id === room.hostId);
+
+    // If host leaves in lobby, immediately terminate room
+    if (isHost && room.status === 'lobby') {
+      io.to(currentRoom).emit('host_closed_lobby', { message: 'The host left the lobby.' });
+      if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
+      rooms.delete(currentRoom);
+      return;
+    }
 
     room.players = room.players.filter(p => p.id !== socket.id);
 
@@ -252,7 +267,7 @@ io.on('connection', (socket) => {
         players: room.players,
         status: room.status,
         settings: room.settings,
-        hostId: room.players[0].id
+        hostId: room.hostId
       });
     }
   });
