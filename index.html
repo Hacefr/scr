@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Stargazer 1v1</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
-    /* Makes pixel art stay crisp on canvas without blurring */
     canvas {
       image-rendering: -moz-crisp-edges;
       image-rendering: -webkit-crisp-edges;
@@ -20,6 +19,9 @@
 <body>
 
   <div id="game-wrapper">
+    <!-- Fullscreen Button -->
+    <button id="btn-fullscreen">⛶ FULLSCREEN</button>
+
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <!-- Disconnect Banner -->
@@ -62,7 +64,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- MATCH RESULTS OVERLAY (VICTORY / DEFEAT) -->
+    <!-- MATCH RESULTS OVERLAY -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -79,6 +81,19 @@
     const network = new NetworkManager();
 
     const assetLoadPromise = engine.loadAssets();
+
+    // Fullscreen Toggle
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    btnFullscreen.onclick = () => {
+      const wrapper = document.getElementById('game-wrapper');
+      if (!document.fullscreenElement) {
+        if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+        else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    };
 
     const menuMain = document.getElementById('menu-main');
     const menuSingle = document.getElementById('menu-single');
@@ -121,7 +136,6 @@
       engine.state = 'READY';
     };
 
-    // Singleplayer with 3-2-1-GO Countdown
     async function startSinglePlayer(role) {
       singleLoadingStatus.innerText = "Buffering audio tracks, please wait...";
       await assetLoadPromise;
@@ -129,7 +143,6 @@
       menuSingle.classList.add('hidden');
       engine.gameMode = 'single';
       engine.setRole(role);
-      // Triggers 2.4s "3, 2, 1, GO!" countdown
       await engine.startWithCountdown(2.4);
     }
 
@@ -168,7 +181,6 @@
       }
     };
 
-    // Multiplayer with Synchronized 3-2-1-GO Countdown
     network.onMatchStarting = async ({ startTimestamp }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
