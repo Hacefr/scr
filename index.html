@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Temu FNF</title>
+  <title>Stargazer 1v1</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -48,7 +48,7 @@
       <button id="btn-to-settings" class="btn" style="border-color:#555; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER -->
+    <!-- 2. CUSTOM SKIN UPLOADER (WITH 3 SLOTS) -->
     <div id="menu-skins" class="overlay hidden">
       <h2>CUSTOM SKIN SLOTS</h2>
       
@@ -173,6 +173,9 @@
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
         <p id="lobby-preload-status" style="color:#55e840; font-size:12px; font-weight:bold;">Track Ready ✓</p>
         
+        <!-- Live Ping Display in Lobby -->
+        <p id="lobby-ping-display" style="font-size:11px; color:#888; margin: 2px 0;">PING: -- | OPPONENT: --</p>
+        
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:13px; color:#FDE871;">TRACK:</span>
           <select id="select-lobby-song" style="background:#101216; color:#fff; border:1px solid #363c4a; padding:6px; font-family:inherit; border-radius:4px; font-size:13px;"></select>
@@ -186,7 +189,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#555; color:#888; margin-top:5px;">BACK</button>
     </div>
 
-    <!-- 7. MATCH RESULTS (NEVER BLANK) -->
+    <!-- 7. MATCH RESULTS -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -204,7 +207,7 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // 1. SKIN SLOTS CONSTANTS & FUNCTIONS
+    // 1. Skin Slots Storage (Defined first to prevent TDZ ReferenceError)
     const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
     let currentSlot = parseInt(localStorage.getItem('equippedSkinSlot') || '1');
     
@@ -272,6 +275,7 @@
     const btnReady = document.getElementById('btn-ready');
     const selectLobbySong = document.getElementById('select-lobby-song');
     const lobbyPreloadStatus = document.getElementById('lobby-preload-status');
+    const lobbyPingDisplay = document.getElementById('lobby-ping-display');
     const btnMobileTaunt = document.getElementById('btn-mobile-taunt');
 
     const slotButtons = [
@@ -368,12 +372,12 @@
 
     // 0. Intro Splash Sequence
     const INTRO_SPLASHES = [
-      ["SHOUTOUTS TO Mike", ";-;"],
-      ["VS IMPOSTOR V4", "FROM TEMU"],
+      ["SHOUTOUTS TO TOM FULP", "LMAO"],
+      ["VS IMPOSTOR V4", "IN YOUR BROWSER"],
       ["CHROMIUM COMPATIBLE", "60 FPS GUARANTEED"],
       ["HIS NAME IS NOT KEITH", "DUMB EGGS"],
-      ["LIMES SUPREMACY", "NOT THAT ONE..."],
-      ["Hello its me", "ITS VERITY"]
+      ["LIMES SUPREMACY", "POLUS MOMENT"],
+      ["SAMPLE ACCURATE AUDIO", "ZERO DRIFT BABY"]
     ];
 
     const splash1 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
@@ -623,6 +627,23 @@
       network.updateRoomSettings({ ghostTapping: !current });
     };
 
+    // Live Ping Sync to Engine & UI
+    setInterval(() => {
+      engine.localPing = network.localPing;
+      engine.opponentPing = network.opponentPing;
+      if (lobbyPingDisplay && !lobbyRoomBox.classList.contains('hidden')) {
+        lobbyPingDisplay.innerText = `PING: ${network.localPing}ms | OPPONENT: ${network.opponentPing}ms`;
+      }
+    }, 1000);
+
+    network.onHostClosedLobby = ({ message }) => {
+      lobbyRoomBox.classList.add('hidden');
+      lobbyConnectBox.classList.remove('hidden');
+      menuMulti.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+      alert(message || "The host left the lobby.");
+    };
+
     network.onRoomSettingsUpdate = (settings) => {
       if (settings.ghostTapping !== undefined) {
         engine.ghostTapping = settings.ghostTapping;
@@ -677,11 +698,12 @@
       }
     };
 
-    // Two-Phase Handshake Check
-    network.onHandshakeCheck = () => {
-      lobbyPreloadStatus.innerText = "LINKING WITH OPPONENT & SERVER...";
+    // Two-Phase Handshake with 5-Burst NTP
+    network.onHandshakeCheck = async () => {
+      lobbyPreloadStatus.innerText = "CALIBRATING CLOCKS & SYNCING...";
       lobbyPreloadStatus.style.color = "#FFAA00";
-      network.syncClockWithServer();
+
+      await network.runBurstNTPCalibration();
 
       if (isLobbyPreloaded) {
         network.sendHandshakeAck();
@@ -691,11 +713,10 @@
             clearInterval(interval);
             network.sendHandshakeAck();
           }
-        }, 50);
+        }, 40);
       }
     };
 
-    // Synchronized Start
     network.onMatchStarting = async ({ startTimestamp, settings }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
@@ -720,7 +741,6 @@
     network.onOpponentDisconnected = () => disconnectBanner.classList.remove('hidden');
     network.onOpponentReconnected = () => disconnectBanner.classList.add('hidden');
 
-    // Winner Screen Handling
     network.onMatchResults = ({ winnerId, players, forfeit }) => {
       disconnectBanner.classList.add('hidden');
       const me = players.find(p => p.id === network.localId);
@@ -760,7 +780,6 @@
       engine.update(dt);
       engine.render();
 
-      // Immediately show results on completion (Never a blank screen!)
       if (engine.state === 'FINISHED' && !menuResults.classList.contains('active')) {
         menuResults.classList.add('active');
 
