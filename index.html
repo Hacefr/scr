@@ -3,57 +3,210 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stargazer - 1v1 Playtest</title>
+  <title>Stargazer 1v1</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Socket.io Client Library -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
 
-  <div id="game-container">
-    <!-- Fixed internal 800x600 resolution for sharp rendering on all screens -->
+  <div id="game-wrapper">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-  </div>
 
-  <div id="instructions">
-    Controls: <strong>D F J K</strong> or <strong>Arrow Keys</strong> | Click screen to Start
+    <!-- Disconnect Banner -->
+    <div id="disconnect-banner" class="hidden">Opponent Disconnected! Waiting (30s)...</div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="menu-main" class="overlay">
+      <h1>STARGAZER</h1>
+      <p style="color: #888;">Low-End Optimized 1v1 Rhythm Engine</p>
+      <button id="btn-to-single" class="btn">SINGLEPLAYER (VS BOT)</button>
+      <button id="btn-to-multi" class="btn">MULTIPLAYER (1v1)</button>
+    </div>
+
+    <!-- SINGLEPLAYER ROLE SELECT -->
+    <div id="menu-single" class="overlay hidden">
+      <h2>SELECT YOUR CHARACTER</h2>
+      <button id="btn-single-bf" class="btn">BOYFRIEND (RIGHT)</button>
+      <button id="btn-single-limes" class="btn">LIMES (LEFT)</button>
+      <button id="btn-single-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+    </div>
+
+    <!-- MULTIPLAYER LOBBY -->
+    <div id="menu-multi" class="overlay hidden">
+      <h2>MULTIPLAYER LOBBY</h2>
+      
+      <div id="lobby-connect-box" style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+        <input type="text" id="input-server-url" value="http://localhost:3000" placeholder="Server URL">
+        <input type="text" id="input-room-code" placeholder="ROOM CODE (e.g. 1234)">
+        <button id="btn-join-room" class="btn">JOIN / CREATE ROOM</button>
+      </div>
+
+      <div id="lobby-room-box" class="hidden" style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+        <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
+        <p id="lobby-status-text" style="color:#aaa;">Waiting for opponent...</p>
+        <button id="btn-switch-role" class="btn">SWITCH ROLE</button>
+        <button id="btn-ready" class="btn btn-ready">TOGGLE READY</button>
+      </div>
+
+      <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+    </div>
+
+    <!-- MATCH RESULTS OVERLAY -->
+    <div id="menu-results" class="overlay hidden">
+      <h1 id="results-title">MATCH FINISHED</h1>
+      <p id="results-body" style="font-size: 16px;"></p>
+      <button id="btn-results-menu" class="btn">MAIN MENU</button>
+    </div>
   </div>
 
   <script type="module">
     import { RhythmEngine } from './engine.js';
+    import { NetworkManager } from './network.js';
 
     const canvas = document.getElementById('gameCanvas');
     const engine = new RhythmEngine(canvas);
+    const network = new NetworkManager();
 
-    // Click or Space to start playback once assets load
-    function handleStart() {
-      if (engine.state === 'READY') {
-        engine.start();
-      }
+    // UI Elements
+    const menuMain = document.getElementById('menu-main');
+    const menuSingle = document.getElementById('menu-single');
+    const menuMulti = document.getElementById('menu-multi');
+    const menuResults = document.getElementById('menu-results');
+    const disconnectBanner = document.getElementById('disconnect-banner');
+
+    const lobbyConnectBox = document.getElementById('lobby-connect-box');
+    const lobbyRoomBox = document.getElementById('lobby-room-box');
+    const lobbyRoomTitle = document.getElementById('lobby-room-title');
+    const lobbyStatusText = document.getElementById('lobby-status-text');
+
+    // 1. Navigation Flow
+    document.getElementById('btn-to-single').onclick = () => {
+      menuMain.classList.add('hidden');
+      menuSingle.classList.remove('hidden');
+    };
+    document.getElementById('btn-single-back').onclick = () => {
+      menuSingle.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
+    document.getElementById('btn-to-multi').onclick = () => {
+      menuMain.classList.add('hidden');
+      menuMulti.classList.remove('hidden');
+    };
+    document.getElementById('btn-multi-back').onclick = () => {
+      menuMulti.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
+    document.getElementById('btn-results-menu').onclick = () => {
+      menuResults.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+      engine.state = 'READY';
+    };
+
+    // 2. Singleplayer Start
+    function startSinglePlayer(role) {
+      menuSingle.classList.add('hidden');
+      engine.gameMode = 'single';
+      engine.setRole(role);
+      engine.start(); // Instant local start
     }
+    document.getElementById('btn-single-bf').onclick = () => startSinglePlayer('bf');
+    document.getElementById('btn-single-limes').onclick = () => startSinglePlayer('limes');
 
-    window.addEventListener('click', handleStart);
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code === 'Enter') {
-        handleStart();
+    // 3. Multiplayer Flow
+    document.getElementById('btn-join-room').onclick = () => {
+      const serverUrl = document.getElementById('input-server-url').value.trim();
+      const code = document.getElementById('input-room-code').value.trim();
+      if (!code) return alert("Enter a room code!");
+
+      network.connect(serverUrl);
+      // Wait slight moment for connection then join
+      setTimeout(() => {
+        network.joinRoom(code, 'bf');
+        lobbyConnectBox.classList.add('hidden');
+        lobbyRoomBox.classList.remove('hidden');
+        lobbyRoomTitle.innerText = `ROOM: ${code.toUpperCase()}`;
+      }, 300);
+    };
+
+    document.getElementById('btn-switch-role').onclick = () => network.switchRole();
+    document.getElementById('btn-ready').onclick = () => network.toggleReady();
+
+    // Hook Note Hits to Network
+    engine.onNoteHitCallback = (data) => {
+      if (engine.gameMode === 'multiplayer') {
+        network.sendNoteHit(data);
       }
-    });
+    };
 
-    // High-Performance 60 FPS RequestAnimationFrame Loop
+    // 4. Network Event Listeners
+    network.onRoomUpdate = ({ players, status }) => {
+      const me = players.find(p => p.id === network.localId);
+      if (me) {
+        engine.setRole(me.role);
+        lobbyStatusText.innerText = `You are: ${me.role.toUpperCase()} | Ready: ${me.ready ? "YES" : "NO"}\nPlayers in Room: ${players.length}/2`;
+      }
+    };
+
+    // Synchronized Start Clock Handler
+    network.onMatchStarting = ({ startTimestamp }) => {
+      menuMulti.classList.add('hidden');
+      engine.gameMode = 'multiplayer';
+
+      // Compute exact delay between server time and local time
+      const delayMs = startTimestamp - Date.now();
+      const scheduledAudioTime = engine.audio.ctx.currentTime + Math.max(0.05, delayMs / 1000);
+
+      engine.start(scheduledAudioTime);
+    };
+
+    // Opponent Hit Sync
+    network.onOpponentHit = ({ lane, rating }) => {
+      const opponentIsBf = (engine.playerRole === 'limes');
+      if (opponentIsBf) {
+        engine.bfPoseTimer = 0.3;
+      } else {
+        engine.limesPoseTimer = 0.3;
+      }
+    };
+
+    // 30s Disconnect Notice
+    network.onOpponentDisconnected = () => {
+      disconnectBanner.classList.remove('hidden');
+    };
+    network.onOpponentReconnected = () => {
+      disconnectBanner.classList.add('hidden');
+    };
+    network.onOpponentForfeit = ({ message }) => {
+      disconnectBanner.classList.add('hidden');
+      alert(message);
+    };
+
+    // 5. Game Loop
     let lastTime = performance.now();
-
     function gameLoop(currentTime) {
       const dt = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
 
-      // Update engine timing and note pool
       engine.update(dt);
-
-      // Draw active frame to canvas
       engine.render();
+
+      // Check if finished
+      if (engine.state === 'FINISHED' && !menuResults.classList.contains('active')) {
+        menuResults.classList.remove('hidden');
+        menuResults.classList.add('active');
+        document.getElementById('results-body').innerText = 
+          `Final Score: ${engine.score} | Accuracy: ${engine.accuracy}%`;
+
+        if (engine.gameMode === 'multiplayer') {
+          network.sendFinished(engine.score, engine.accuracy);
+        }
+      }
 
       requestAnimationFrame(gameLoop);
     }
 
-    // Start loading assets on boot
+    // Preload audio and JSON on boot
     engine.loadAssets().then(() => {
       requestAnimationFrame(gameLoop);
     });
