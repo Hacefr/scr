@@ -48,12 +48,11 @@
       <button id="btn-to-settings" class="btn" style="border-color:#888; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER (INDIVIDUAL SECTIONS) -->
+    <!-- 2. CUSTOM SKIN UPLOADER -->
     <div id="menu-skins" class="overlay hidden">
       <h2>CUSTOM SKIN SLOTS</h2>
       
       <div class="skin-slots-container">
-        <!-- Idle -->
         <div class="skin-slot-row">
           <span class="skin-slot-label">IDLE POSE:</span>
           <div>
@@ -62,7 +61,6 @@
           </div>
         </div>
 
-        <!-- Left -->
         <div class="skin-slot-row">
           <span class="skin-slot-label">LEFT POSE:</span>
           <div>
@@ -71,7 +69,6 @@
           </div>
         </div>
 
-        <!-- Down -->
         <div class="skin-slot-row">
           <span class="skin-slot-label">DOWN POSE:</span>
           <div>
@@ -80,7 +77,6 @@
           </div>
         </div>
 
-        <!-- Up -->
         <div class="skin-slot-row">
           <span class="skin-slot-label">UP POSE:</span>
           <div>
@@ -89,7 +85,6 @@
           </div>
         </div>
 
-        <!-- Right -->
         <div class="skin-slot-row">
           <span class="skin-slot-label">RIGHT POSE:</span>
           <div>
@@ -98,7 +93,6 @@
           </div>
         </div>
 
-        <!-- Miss (Optional) -->
         <div class="skin-slot-row">
           <span class="skin-slot-label" style="color:#ff7575;">MISS POSE:</span>
           <div>
@@ -107,7 +101,6 @@
           </div>
         </div>
 
-        <!-- Taunt (Optional) -->
         <div class="skin-slot-row">
           <span class="skin-slot-label" style="color:#FFDD00;">TAUNT POSE:</span>
           <div>
@@ -116,7 +109,6 @@
           </div>
         </div>
 
-        <!-- Bar Icon (Optional) -->
         <div class="skin-slot-row">
           <span class="skin-slot-label" style="color:#66fcf1;">BAR ICON:</span>
           <div>
@@ -132,14 +124,15 @@
       </div>
     </div>
 
-    <!-- 3. SETTINGS MENU -->
+    <!-- 3. SETTINGS MENU (WITH GHOST TAPPING + MOBILE CONTROLS TOGGLE) -->
     <div id="menu-settings" class="overlay hidden">
       <h2>SETTINGS</h2>
       <button id="btn-toggle-ghost" class="btn">GHOST TAPPING: ON</button>
-      <p style="font-size:12px; color:#888; max-width:280px; text-align:center;">
-        ON: Tapping keys with no notes does not miss.<br>OFF: Classic FNF strict missing.
+      <button id="btn-toggle-mobile-mode" class="btn" style="border-color:#45f3ff; color:#45f3ff;">MOBILE CONTROLS: AUTO</button>
+      <p style="font-size:12px; color:#888; max-width:300px; text-align:center;">
+        AUTO: Enabled only on touchscreens.<br>ON: Force touch buttons.<br>OFF: Pure keyboard mode.
       </p>
-      <button id="btn-settings-back" class="btn" style="border-color:#888; color:#888; margin-top:10px;">BACK</button>
+      <button id="btn-settings-back" class="btn" style="border-color:#888; color:#888; margin-top:6px;">BACK</button>
     </div>
 
     <!-- 4. FREEPLAY TRACK SELECTOR -->
@@ -172,6 +165,7 @@
       <div id="lobby-room-box" class="hidden" style="display:flex; flex-direction:column; gap:8px; align-items:center;">
         <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
+        <p id="lobby-preload-status" style="color:#55e840; font-size:12px; font-weight:bold;">Track Ready ✓</p>
         
         <!-- Host Song Chooser -->
         <div style="display:flex; align-items:center; gap:8px;">
@@ -205,8 +199,12 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
+    // Settings Persistence
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
+
+    let userMobileMode = localStorage.getItem('mobileControlsMode') || 'auto';
+    engine.mobileControlsMode = userMobileMode;
 
     let localSkinData = JSON.parse(localStorage.getItem('customSkin') || '{}');
     if (Object.keys(localSkinData).length > 0) {
@@ -216,6 +214,7 @@
     let isRoomHost = false;
     let songCatalog = [];
     let selectedSong = null;
+    let isLobbyPreloaded = false;
 
     // UI Elements
     const screenBoot = document.getElementById('screen-boot');
@@ -236,12 +235,53 @@
     const songLoadError = document.getElementById('song-load-error');
 
     const btnToggleGhost = document.getElementById('btn-toggle-ghost');
+    const btnToggleMobileMode = document.getElementById('btn-toggle-mobile-mode');
     const btnLobbyGhost = document.getElementById('btn-lobby-ghost');
+    const btnReady = document.getElementById('btn-ready');
     const selectLobbySong = document.getElementById('select-lobby-song');
+    const lobbyPreloadStatus = document.getElementById('lobby-preload-status');
+    const btnMobileTaunt = document.getElementById('btn-mobile-taunt');
+
+    function updateMobileButtonVisibility() {
+      if (engine.shouldShowMobileUI()) {
+        btnMobileTaunt.style.display = 'flex';
+      } else {
+        btnMobileTaunt.style.display = 'none';
+      }
+    }
+    updateMobileButtonVisibility();
+
+    // Mobile Mode Toggle
+    function updateMobileModeUI() {
+      btnToggleMobileMode.innerText = `MOBILE CONTROLS: ${engine.mobileControlsMode.toUpperCase()}`;
+      updateMobileButtonVisibility();
+    }
+    updateMobileModeUI();
+
+    btnToggleMobileMode.onclick = () => {
+      const modes = ['auto', 'on', 'off'];
+      const nextIdx = (modes.indexOf(engine.mobileControlsMode) + 1) % modes.length;
+      engine.mobileControlsMode = modes[nextIdx];
+      localStorage.setItem('mobileControlsMode', engine.mobileControlsMode);
+      updateMobileModeUI();
+    };
+
+    // Ghost Tapping Toggle
+    function updateGhostButtonUI() {
+      btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
+      btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
+      btnToggleGhost.style.borderColor = engine.ghostTapping ? "#55e840" : "#ff5555";
+    }
+    updateGhostButtonUI();
+
+    btnToggleGhost.onclick = () => {
+      engine.ghostTapping = !engine.ghostTapping;
+      localStorage.setItem('ghostTapping', engine.ghostTapping);
+      updateGhostButtonUI();
+    };
 
     // Individual Skin Slots Setup
     const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
-
     function updateSkinSlotStatuses() {
       SLOTS.forEach(slot => {
         const statusEl = document.getElementById(`status-${slot}`);
@@ -337,7 +377,7 @@
       }
     };
 
-    document.getElementById('btn-mobile-taunt').onclick = (e) => {
+    btnMobileTaunt.onclick = (e) => {
       e.stopPropagation();
       engine.triggerTaunt();
     };
@@ -346,19 +386,6 @@
     btnToggleMirror.onclick = () => {
       engine.mirrorSprite = !engine.mirrorSprite;
       btnToggleMirror.innerText = `MIRROR SPRITE: ${engine.mirrorSprite ? "ON" : "OFF"}`;
-    };
-
-    function updateGhostButtonUI() {
-      btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
-      btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
-      btnToggleGhost.style.borderColor = engine.ghostTapping ? "#55e840" : "#ff5555";
-    }
-    updateGhostButtonUI();
-
-    btnToggleGhost.onclick = () => {
-      engine.ghostTapping = !engine.ghostTapping;
-      localStorage.setItem('ghostTapping', engine.ghostTapping);
-      updateGhostButtonUI();
     };
 
     // Navigation
@@ -471,11 +498,32 @@
     document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
     document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
 
-    // Multiplayer Flow
+    // Multiplayer Flow & Preloading
     const lobbyConnectBox = document.getElementById('lobby-connect-box');
     const lobbyRoomBox = document.getElementById('lobby-room-box');
     const lobbyRoomTitle = document.getElementById('lobby-room-title');
     const lobbyStatusText = document.getElementById('lobby-status-text');
+
+    async function preloadLobbyTrack(songId) {
+      const songToLoad = songCatalog.find(s => s.id === songId) || songCatalog[0];
+      isLobbyPreloaded = false;
+      btnReady.disabled = true;
+      btnReady.style.opacity = "0.5";
+      lobbyPreloadStatus.innerText = `Buffering ${songToLoad.name}...`;
+      lobbyPreloadStatus.style.color = "#FFAA00";
+
+      try {
+        await engine.loadAssets(songToLoad);
+        isLobbyPreloaded = true;
+        btnReady.disabled = false;
+        btnReady.style.opacity = "1.0";
+        lobbyPreloadStatus.innerText = `${songToLoad.name} Ready ✓`;
+        lobbyPreloadStatus.style.color = "#55e840";
+      } catch (err) {
+        lobbyPreloadStatus.innerText = `Error loading ${songToLoad.name}!`;
+        lobbyPreloadStatus.style.color = "#ff5555";
+      }
+    }
 
     document.getElementById('btn-join-room').onclick = () => {
       const serverUrl = document.getElementById('input-server-url').value.trim();
@@ -488,12 +536,14 @@
         lobbyConnectBox.classList.add('hidden');
         lobbyRoomBox.classList.remove('hidden');
         lobbyRoomTitle.innerText = `ROOM: ${code.toUpperCase()}`;
+        preloadLobbyTrack(selectLobbySong.value || 'stargazer');
       }, 400);
     };
 
     selectLobbySong.onchange = () => {
       if (!isRoomHost) return;
       network.updateRoomSettings({ selectedSongId: selectLobbySong.value });
+      preloadLobbyTrack(selectLobbySong.value);
     };
 
     btnLobbyGhost.onclick = () => {
@@ -510,6 +560,7 @@
       }
       if (settings.selectedSongId) {
         selectLobbySong.value = settings.selectedSongId;
+        preloadLobbyTrack(settings.selectedSongId);
       }
     };
 
@@ -518,7 +569,10 @@
     };
 
     document.getElementById('btn-switch-role').onclick = () => network.switchRole();
-    document.getElementById('btn-ready').onclick = () => network.toggleReady();
+    btnReady.onclick = () => {
+      if (!isLobbyPreloaded) return;
+      network.toggleReady();
+    };
 
     engine.onNoteHitCallback = (data) => {
       if (engine.gameMode === 'multiplayer') network.sendNoteHit(data);
@@ -545,24 +599,23 @@
         btnLobbyGhost.style.color = settings.ghostTapping ? "#55e840" : "#ff5555";
         btnLobbyGhost.style.cursor = isRoomHost ? "pointer" : "default";
 
-        if (settings.selectedSongId) {
+        if (settings.selectedSongId && selectLobbySong.value !== settings.selectedSongId) {
           selectLobbySong.value = settings.selectedSongId;
+          preloadLobbyTrack(settings.selectedSongId);
         }
       }
     };
 
+    // Zero-Desync Match Start: Audio is already in RAM!
     network.onMatchStarting = async ({ startTimestamp, settings }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
 
       if (settings) {
         engine.ghostTapping = settings.ghostTapping;
-        const targetSong = songCatalog.find(s => s.id === settings.selectedSongId) || songCatalog[0];
-        await engine.loadAssets(targetSong);
-      } else {
-        await engine.loadAssets(songCatalog[0]);
       }
 
+      // No waiting on loadAssets! Preload already completed in lobby.
       const delayMs = startTimestamp - Date.now();
       const delaySeconds = Math.max(0.1, delayMs / 1000);
       const scheduledAudioTime = engine.audio.ctx.currentTime + delaySeconds;
