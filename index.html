@@ -37,14 +37,15 @@
       <h2>MULTIPLAYER LOBBY</h2>
       
       <div id="lobby-connect-box" style="display:flex; flex-direction:column; gap:10px; align-items:center;">
-        <input type="text" id="input-server-url" value="http://localhost:3000" placeholder="Server URL">
+        <!-- Live Render Relay URL -->
+        <input type="text" id="input-server-url" value="https://scr-j5lv.onrender.com" placeholder="Server URL">
         <input type="text" id="input-room-code" placeholder="ROOM CODE (e.g. 1234)">
         <button id="btn-join-room" class="btn">JOIN / CREATE ROOM</button>
       </div>
 
       <div id="lobby-room-box" class="hidden" style="display:flex; flex-direction:column; gap:10px; align-items:center;">
         <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
-        <p id="lobby-status-text" style="color:#aaa;">Waiting for opponent...</p>
+        <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line;">Waiting for opponent...</p>
         <button id="btn-switch-role" class="btn">SWITCH ROLE</button>
         <button id="btn-ready" class="btn btn-ready">TOGGLE READY</button>
       </div>
@@ -103,12 +104,12 @@
       engine.state = 'READY';
     };
 
-    // 2. Singleplayer Start
+    // 2. Singleplayer Start Flow
     function startSinglePlayer(role) {
       menuSingle.classList.add('hidden');
       engine.gameMode = 'single';
       engine.setRole(role);
-      engine.start(); // Instant local start
+      engine.start(); // Instant local playback
     }
     document.getElementById('btn-single-bf').onclick = () => startSinglePlayer('bf');
     document.getElementById('btn-single-limes').onclick = () => startSinglePlayer('limes');
@@ -117,16 +118,16 @@
     document.getElementById('btn-join-room').onclick = () => {
       const serverUrl = document.getElementById('input-server-url').value.trim();
       const code = document.getElementById('input-room-code').value.trim();
-      if (!code) return alert("Enter a room code!");
+      if (!code) return alert("Please enter a room code!");
 
       network.connect(serverUrl);
-      // Wait slight moment for connection then join
+
       setTimeout(() => {
         network.joinRoom(code, 'bf');
         lobbyConnectBox.classList.add('hidden');
         lobbyRoomBox.classList.remove('hidden');
         lobbyRoomTitle.innerText = `ROOM: ${code.toUpperCase()}`;
-      }, 300);
+      }, 400);
     };
 
     document.getElementById('btn-switch-role').onclick = () => network.switchRole();
@@ -153,7 +154,7 @@
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
 
-      // Compute exact delay between server time and local time
+      // Compute sample-accurate delay between server time and AudioContext time
       const delayMs = startTimestamp - Date.now();
       const scheduledAudioTime = engine.audio.ctx.currentTime + Math.max(0.05, delayMs / 1000);
 
