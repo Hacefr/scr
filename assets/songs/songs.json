@@ -1,0 +1,11 @@
+[
+  {
+    "id": "stargazer",
+    "name": "Stargazer",
+    "folder": "stargazer",
+    "chart": "normal.json",
+    "color": "#55E840",
+    "bpm": 150,
+    "difficulty": "Hard"
+  }
+]
