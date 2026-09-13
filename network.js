@@ -1,6 +1,7 @@
 /**
  * network.js
- * Full Network Manager with NTP Clock Calibration and Handshake Support
+ * 5-Burst Lowest-RTT NTP Clock Synchronizer & Ping Monitor
+ * Save in ROOT folder
  */
 
 export class NetworkManager {
@@ -9,7 +10,12 @@ export class NetworkManager {
     this.connected = false;
     this.roomCode = null;
     this.localId = null;
+
+    // Filtered Millisecond Offset & Ping Metrics
     this.serverTimeOffset = 0;
+    this.localPing = 0;
+    this.opponentPing = 0;
+    this.pingInterval = null;
 
     this.onRoomUpdate = null;
     this.onRoomSettingsUpdate = null;
@@ -17,6 +23,8 @@ export class NetworkManager {
     this.onHandshakeCheck = null;
     this.onMatchStarting = null;
     this.onOpponentHit = null;
+    this.onOpponentPing = null;
+    this.onHostClosedLobby = null;
     this.onOpponentDisconnected = null;
     this.onOpponentReconnected = null;
     this.onMatchResults = null;
@@ -33,14 +41,29 @@ export class NetworkManager {
     this.socket.on('connect', () => {
       this.connected = true;
       this.localId = this.socket.id;
-      this.syncClockWithServer();
+      // Run high-accuracy 5-burst calibration on connect
+      this.runBurstNTPCalibration();
+      // Start background heartbeat ping monitor
+      this.startPingHeartbeat();
     });
 
     this.socket.on('sync_pong', ({ clientSendTime, serverTime }) => {
       const now = Date.now();
-      const roundTrip = now - clientSendTime;
-      const oneWayLatency = roundTrip / 2;
-      this.serverTimeOffset = (serverTime + oneWayLatency) - now;
+      const rtt = now - clientSendTime;
+      const oneWayLatency = rtt / 2;
+      this.localPing = Math.round(oneWayLatency);
+
+      // Report ping to opponent
+      this.socket.emit('player_ping', this.localPing);
+    });
+
+    this.socket.on('opponent_ping', (pingVal) => {
+      this.opponentPing = pingVal;
+      if (this.onOpponentPing) this.onOpponentPing(pingVal);
+    });
+
+    this.socket.on('host_closed_lobby', (data) => {
+      if (this.onHostClosedLobby) this.onHostClosedLobby(data);
     });
 
     this.socket.on('handshake_check', () => {
@@ -84,9 +107,50 @@ export class NetworkManager {
     });
   }
 
-  syncClockWithServer() {
+  /**
+   * Aggressive NTP Calibration: Pings 5 times, discards jitter/lag spikes,
+   * and locks to the single lowest Round-Trip-Time packet.
+   */
+  async runBurstNTPCalibration() {
     if (!this.socket || !this.connected) return;
-    this.socket.emit('sync_ping', Date.now());
+
+    const samples = [];
+    for (let i = 0; i < 5; i++) {
+      const sendTime = Date.now();
+      await new Promise((resolve) => {
+        const handler = ({ clientSendTime, serverTime }) => {
+          if (clientSendTime === sendTime) {
+            const now = Date.now();
+            const rtt = now - sendTime;
+            const oneWay = rtt / 2;
+            const offset = (serverTime + oneWay) - now;
+            samples.push({ rtt, offset, oneWay });
+            this.socket.off('sync_pong', handler);
+            resolve();
+          }
+        };
+        this.socket.on('sync_pong', handler);
+        this.socket.emit('sync_ping', sendTime);
+      });
+      // 100ms spacing between calibration bursts
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    // Sort by lowest RTT (cleanest transmission without packet buffer delay)
+    samples.sort((a, b) => a.rtt - b.rtt);
+    const bestSample = samples[0];
+    this.serverTimeOffset = bestSample.offset;
+    this.localPing = Math.round(bestSample.oneWay);
+    console.log(`[High-Precision NTP Calibrated] Best RTT: ${bestSample.rtt}ms | Offset: ${Math.round(this.serverTimeOffset)}ms`);
+  }
+
+  startPingHeartbeat() {
+    if (this.pingInterval) clearInterval(this.pingInterval);
+    this.pingInterval = setInterval(() => {
+      if (this.socket && this.connected) {
+        this.socket.emit('sync_ping', Date.now());
+      }
+    }, 2500);
   }
 
   getSyncedServerTime() {
