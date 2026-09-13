@@ -1,6 +1,6 @@
 /**
- * engine.js (Fixed Camera Pan, Tug-Of-War Icons, and Menu Clean Render)
- * Save in ROOT folder
+ * engine.js
+ * Complete Core Canvas Engine
  */
 
 import { AudioManager } from './audio.js';
@@ -43,20 +43,17 @@ export class RhythmEngine {
     this.spawnIndex = 0;
     this.totalSongDuration = 120;
 
-    // Camera Beat Bop & Pan States
+    // Camera Beat Bop & Pan
     this.camZoom = 1.0;
     this.camX = 0;
     this.targetCamX = 0;
     this.lastBeat = -1;
 
-    // Tug-of-War Health (0.05 to 1.95)
     this.health = 1.0;
 
-    // Stage Background
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Custom Skins Store
     this.customSkins = {
       local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null },
       opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null }
@@ -70,17 +67,15 @@ export class RhythmEngine {
     this.ghostTapping = true;
     this.mobileControlsMode = 'auto';
 
-    // Countdown State
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
+    this.targetStartAudioTime = 0;
 
-    // Touch & Inputs
     this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     this.keysHeld = [false, false, false, false];
     this.activeTouches = new Map();
 
-    // Stats
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -89,7 +84,6 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
     this.bfPoseDir = -1;
@@ -102,7 +96,6 @@ export class RhythmEngine {
 
     this.mirrorSprite = false;
 
-    // Opponent Live Tracking
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
     this.opponentKeyTimers = [0, 0, 0, 0];
@@ -286,14 +279,13 @@ export class RhythmEngine {
     }
   }
 
-  async startWithCountdown(delaySeconds = 2.4, targetAudioTime = null) {
+  async startWithCountdown(targetStartAudioTime, countdownDurationSeconds = 3.0) {
     await this.audio.initContext();
     this.state = 'COUNTDOWN';
-    this.countdownTimer = delaySeconds;
+    this.targetStartAudioTime = targetStartAudioTime;
+    this.countdownTimer = countdownDurationSeconds;
 
-    const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
-    this.audio.playAt(scheduledTime);
-
+    this.audio.playAt(targetStartAudioTime);
     this.creditCardTimer = 4.0;
   }
 
@@ -346,11 +338,11 @@ export class RhythmEngine {
       if (this.playerRole === 'bf') {
         this.bfPoseTimer = 0.3;
         this.bfPoseDir = lane;
-        this.targetCamX = 25; // Target BF (Right side)
+        this.targetCamX = 25;
       } else {
         this.limesPoseTimer = 0.3;
         this.limesPoseDir = lane;
-        this.targetCamX = -25; // Target Limes (Left side)
+        this.targetCamX = -25;
       }
 
       if (this.onNoteHitCallback) {
@@ -382,11 +374,11 @@ export class RhythmEngine {
     if (this.playerRole === 'bf') {
       this.limesPoseTimer = 0.3;
       this.limesPoseDir = lane;
-      this.targetCamX = -25; // Pan to Limes
+      this.targetCamX = -25;
     } else {
       this.bfPoseTimer = 0.3;
       this.bfPoseDir = lane;
-      this.targetCamX = 25; // Pan to BF
+      this.targetCamX = 25;
     }
 
     const targetIsPlayer = (this.playerRole !== 'bf');
@@ -413,21 +405,24 @@ export class RhythmEngine {
     if (this.creditCardTimer > 0) this.creditCardTimer -= dt;
 
     if (this.state === 'COUNTDOWN') {
-      this.countdownTimer -= dt;
-      if (this.countdownTimer > 1.8) {
+      const remainingSeconds = this.targetStartAudioTime - this.audio.ctx.currentTime;
+      this.countdownTimer = Math.max(0, remainingSeconds);
+
+      if (this.countdownTimer > 2.0) {
         this.countdownText = "3";
         this.countdownColor = "#F9393F";
-      } else if (this.countdownTimer > 1.2) {
+      } else if (this.countdownTimer > 1.0) {
         this.countdownText = "2";
         this.countdownColor = "#FFAA00";
-      } else if (this.countdownTimer > 0.6) {
+      } else if (this.countdownTimer > 0.1) {
         this.countdownText = "1";
         this.countdownColor = "#FFDD00";
-      } else if (this.countdownTimer > 0.0) {
+      } else {
         this.countdownText = "GO!";
         this.countdownColor = "#12FA05";
-      } else {
-        this.state = 'PLAYING';
+        if (remainingSeconds <= 0) {
+          this.state = 'PLAYING';
+        }
       }
     }
 
@@ -435,7 +430,6 @@ export class RhythmEngine {
 
     const songTime = this.audio.getCurrentSongTime();
 
-    // 1. Camera Beat Bop
     if (this.bpm > 0) {
       const currentBeat = Math.floor(songTime * (this.bpm / 60));
       if (currentBeat !== this.lastBeat && currentBeat >= 0) {
@@ -446,13 +440,11 @@ export class RhythmEngine {
     this.camZoom += (1.0 - this.camZoom) * 10 * dt;
     this.camX += (this.targetCamX - this.camX) * 4 * dt;
 
-    // 2. Song Complete Check
     if (this.spawnIndex >= this.chartNotes.length && songTime > (this.chartNotes[this.chartNotes.length - 1].time + 2.0)) {
       this.state = 'FINISHED';
       return;
     }
 
-    // 3. Spawn Notes
     const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -477,7 +469,6 @@ export class RhythmEngine {
       const isBotNote = (note.isPlayer !== humanIsPlayer);
       const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
-      // Sustain Hold Logic
       if (note.isHolding) {
         if (!isBotNote) {
           if (this.keysHeld[note.lane]) {
@@ -505,7 +496,6 @@ export class RhythmEngine {
         }
       }
 
-      // Bot Auto-Hit
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.sustainLength > 0) {
@@ -518,7 +508,6 @@ export class RhythmEngine {
         }
       }
 
-      // Human Miss
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -548,7 +537,7 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // If on Menu or Boot: ONLY render clean background, DO NOT render gameplay!
+    // If on Menu or Boot: ONLY render clean background
     if (this.state !== 'PLAYING' && this.state !== 'COUNTDOWN') {
       if (this.hasBg) {
         ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
@@ -558,14 +547,11 @@ export class RhythmEngine {
         ctx.fillStyle = '#111318';
         ctx.fillRect(0, 0, this.width, this.height);
       }
-      return; // Exit! No ghost gameplay in menus!
+      return;
     }
 
-    // ==========================================
-    // LAYER 1: STAGE (CORRECTED CAMERA PAN: NEGATIVE TRANSLATE)
-    // ==========================================
+    // 1. LAYER 1: STAGE (Correct negative translation camera)
     ctx.save();
-    // Inverted so positive targetCamX moves world LEFT, focusing camera RIGHT on BF!
     ctx.translate(this.width / 2 - this.camX, this.height / 2);
     ctx.scale(this.camZoom, this.camZoom);
     ctx.translate(-this.width / 2, -this.height / 2);
@@ -579,21 +565,15 @@ export class RhythmEngine {
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    // Grounded Characters
     this.renderCharacters(ctx);
+    ctx.restore();
 
-    ctx.restore(); // END CAMERA TRANSFORM
-
-    // ==========================================
-    // LAYER 2: MOBILE TOUCH HITBOXES
-    // ==========================================
+    // 2. LAYER 2: MOBILE TOUCH HITBOXES
     if (this.shouldShowMobileUI()) {
       this.renderTouchHitboxes(ctx);
     }
 
-    // ==========================================
-    // LAYER 3: RECEPTORS & NOTES (STATIC FOREGROUND)
-    // ==========================================
+    // 3. LAYER 3: RECEPTORS & NOTES
     const oppBaseX = 80;
     const playerBaseX = 460;
 
@@ -608,7 +588,6 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // Draw Notes with Hold Trails
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
@@ -641,9 +620,7 @@ export class RhythmEngine {
       }
     });
 
-    // ==========================================
-    // LAYER 4: TOP TIME BAR & BOTTOM TUG-OF-WAR BAR WITH ICONS
-    // ==========================================
+    // 4. LAYER 4: BARS & HUD
     this.renderTopTimeBar(ctx);
     this.renderBottomHealthBar(ctx);
     this.renderHUD(ctx);
@@ -697,25 +674,19 @@ export class RhythmEngine {
     ctx.restore();
   }
 
-  /**
-   * Classic FNF Tug-Of-War Health Bar WITH BOUNCING ICONS
-   */
   renderBottomHealthBar(ctx) {
     const barW = 380;
     const barH = 12;
     const barX = (this.width - barW) / 2;
     const barY = this.height - 48;
 
-    // Normalizes health: 0.0 (Limes) to 2.0 (BF)
     const playerPct = Math.min(1, Math.max(0, this.health / 2.0));
     const splitX = barX + (barW * (1 - playerPct));
 
     ctx.save();
-    // Left: Limes / Opponent Color
     ctx.fillStyle = '#55E840';
     ctx.fillRect(barX, barY, barW, barH);
 
-    // Right: Boyfriend Color
     ctx.fillStyle = '#38A8FF';
     ctx.fillRect(splitX, barY, (barX + barW) - splitX, barH);
 
@@ -723,20 +694,14 @@ export class RhythmEngine {
     ctx.lineWidth = 2.5;
     ctx.strokeRect(barX, barY, barW, barH);
 
-    // Divider Peg
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(splitX - 2, barY - 2, 4, barH + 4);
 
-    // Render Bouncing Character Icons at the Divider
     const iconY = barY + barH / 2;
-    const iconScale = this.camZoom; // Bounces with the beat!
+    const iconScale = this.camZoom;
 
-    // Opponent Icon (Left of Divider)
     this.drawHealthIcon(ctx, splitX - 18, iconY, 'opponent', { bg: '#2A7A20', text: 'L' }, iconScale);
-
-    // Player Icon (Right of Divider)
     this.drawHealthIcon(ctx, splitX + 18, iconY, 'local', { bg: '#175294', text: 'BF' }, iconScale);
-
     ctx.restore();
   }
 
@@ -752,7 +717,6 @@ export class RhythmEngine {
     if (skin && skin.icon && skin.icon.complete && skin.icon.naturalWidth > 0) {
       ctx.drawImage(skin.icon, -16, -16, 32, 32);
     } else {
-      // Crisp Placeholder Icon Badge
       ctx.fillStyle = fallback.bg;
       ctx.beginPath();
       ctx.arc(0, 0, 14, 0, Math.PI * 2);
@@ -775,7 +739,7 @@ export class RhythmEngine {
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
 
-    const hudY = this.height - 18; // Cleanly at the bottom
+    const hudY = this.height - 18;
 
     if (this.gameMode === 'multiplayer') {
       const youLead = this.score >= this.opponentScore;
@@ -844,7 +808,6 @@ export class RhythmEngine {
     const limesSkin = isLimesLocal ? this.customSkins.local : this.customSkins.opponent;
     const bfSkin = isLimesLocal ? this.customSkins.opponent : this.customSkins.local;
 
-    // LEFT: Limes
     this.drawCharacter(
       ctx, 200, groundY, limesSkin,
       this.limesPoseDir, this.limesPoseTimer, this.limesMissTimer, this.limesTauntTimer,
@@ -853,7 +816,6 @@ export class RhythmEngine {
       this.mirrorSprite
     );
 
-    // RIGHT: Boyfriend (Mirrored so BF faces Left!)
     this.drawCharacter(
       ctx, 580, groundY, bfSkin,
       this.bfPoseDir, this.bfPoseTimer, this.bfMissTimer, this.bfTauntTimer,
