@@ -1,5 +1,5 @@
 /**
- * engine.js (Custom Skin Image Engine with Fit-To-Frame Scaling & Ground Anchoring)
+ * engine.js (Zero-Desync Audio Preload & Mobile Controls Setting)
  * Save in ROOT folder
  */
 
@@ -45,7 +45,7 @@ export class RhythmEngine {
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Custom Skins Store (Images)
+    // Custom Skins Store
     this.customSkins = {
       local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null },
       opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null }
@@ -58,7 +58,10 @@ export class RhythmEngine {
     this.playerRole = 'bf';
     this.ghostTapping = true;
 
-    // Countdown
+    // Mobile Controls Mode: 'auto' | 'on' | 'off'
+    this.mobileControlsMode = 'auto';
+
+    // Countdown State
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
@@ -109,9 +112,12 @@ export class RhythmEngine {
     this.playerRole = role;
   }
 
-  /**
-   * Sets custom skin image from Base64 strings or URLs
-   */
+  shouldShowMobileUI() {
+    if (this.mobileControlsMode === 'on') return true;
+    if (this.mobileControlsMode === 'off') return false;
+    return this.isTouchDevice;
+  }
+
   setSkin(target, skinData) {
     if (!skinData) return;
     const poses = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt'];
@@ -161,11 +167,9 @@ export class RhythmEngine {
     };
 
     const handleTouchStart = (e) => {
+      if (!this.shouldShowMobileUI()) return;
       e.preventDefault();
       this.isTouchDevice = true;
-
-      const tauntBtn = document.getElementById('btn-mobile-taunt');
-      if (tauntBtn) tauntBtn.style.display = 'flex';
 
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
@@ -182,6 +186,7 @@ export class RhythmEngine {
     };
 
     const handleTouchEnd = (e) => {
+      if (!this.shouldShowMobileUI()) return;
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
@@ -229,10 +234,9 @@ export class RhythmEngine {
     this.stageBg.src = `assets/songs/${folder}/bg.png`;
 
     try {
-      this.loadingStatus = `Loading ${songData.name} audio...`;
+      this.loadingStatus = `Buffering ${songData.name}...`;
       const audioPromise = this.audio.loadSongs(`assets/songs/${folder}/Inst.ogg`, `assets/songs/${folder}/Voices.ogg`);
 
-      this.loadingStatus = `Loading ${songData.name} chart...`;
       const chartPromise = fetch(`assets/songs/${folder}/${chartFile}`).then(res => {
         if (!res.ok) throw new Error(`Could not find assets/songs/${folder}/${chartFile}`);
         return res.json();
@@ -240,7 +244,6 @@ export class RhythmEngine {
 
       const [_, rawJson] = await Promise.all([audioPromise, chartPromise]);
 
-      this.loadingStatus = "Parsing chart...";
       this.chart = ChartParser.parse(rawJson);
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
@@ -254,7 +257,8 @@ export class RhythmEngine {
       this.lastRating = "";
 
       this.state = 'READY';
-      this.loadingStatus = "Loaded!";
+      this.loadingStatus = "Ready!";
+      return true;
     } catch (err) {
       this.state = 'ERROR';
       this.loadingStatus = `Error: ${err.message}`;
@@ -475,7 +479,7 @@ export class RhythmEngine {
         }
       }
 
-      // Human Miss
+      // Human Miss Check
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -519,11 +523,11 @@ export class RhythmEngine {
       return;
     }
 
-    // 2. Characters (Rendered with custom pixel art or fallback boxes)
+    // 2. Characters (Grounded behind notes)
     this.renderCharacters(ctx);
 
-    // 3. Mobile Touch Hitboxes
-    if (this.isTouchDevice) {
+    // 3. Mobile Touch Hitboxes (Respects Mobile Controls Setting)
+    if (this.shouldShowMobileUI()) {
       this.renderTouchHitboxes(ctx);
     }
 
@@ -594,9 +598,6 @@ export class RhythmEngine {
     }
   }
 
-  /**
-   * Helper to draw character sprite or fallback box with floor anchoring & auto-scaling
-   */
   drawCharacter(ctx, x, groundY, skin, poseDir, poseTimer, missTimer, tauntTimer, fallbackColor, label, shouldMirror) {
     ctx.save();
     ctx.translate(x, groundY);
@@ -605,7 +606,6 @@ export class RhythmEngine {
       ctx.scale(-1, 1);
     }
 
-    // Determine current active pose image
     let activeImg = null;
     const dirs = ['left', 'down', 'up', 'right'];
 
@@ -615,7 +615,6 @@ export class RhythmEngine {
     else if (skin.idle) activeImg = skin.idle;
 
     if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
-      // Fit-to-Frame Scaling & Floor Anchoring
       const maxW = 160;
       const maxH = 200;
       const scale = Math.min(maxW / activeImg.naturalWidth, maxH / activeImg.naturalHeight);
@@ -624,7 +623,6 @@ export class RhythmEngine {
 
       ctx.drawImage(activeImg, -w / 2, -h, w, h);
     } else {
-      // Fallback Box
       const boxW = 100;
       const boxH = 140;
       ctx.globalAlpha = 0.85;
@@ -658,7 +656,7 @@ export class RhythmEngine {
       this.mirrorSprite
     );
 
-    // RIGHT: Boyfriend (Mirrored by default so BF looks Left!)
+    // RIGHT: Boyfriend
     this.drawCharacter(
       ctx, 580, groundY, bfSkin,
       this.bfPoseDir, this.bfPoseTimer, this.bfMissTimer, this.bfTauntTimer,
