@@ -20,8 +20,6 @@
 
   <div id="game-wrapper">
     <button id="btn-fullscreen">⛶ FULLSCREEN</button>
-
-    <!-- Mobile-Only Yellow Taunt Button -->
     <div id="btn-mobile-taunt" title="Taunt (T)">TAUNT</div>
 
     <div id="version-tag">
@@ -29,7 +27,6 @@
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-
     <div id="disconnect-banner" class="hidden">Opponent Disconnected! Waiting (30s)...</div>
 
     <!-- 0. FNF INTRO SPLASH TEXT BOOT SCREEN -->
@@ -47,16 +44,27 @@
       <p style="color: #888;">Low-End Optimized 1v1 Rhythm Engine</p>
       <button id="btn-to-freeplay" class="btn">FREEPLAY (TRACKS)</button>
       <button id="btn-to-multi" class="btn">MULTIPLAYER (1v1)</button>
+      <button id="btn-to-settings" class="btn" style="border-color:#888; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. FREEPLAY TRACK SELECTOR -->
+    <!-- 2. SETTINGS MENU -->
+    <div id="menu-settings" class="overlay hidden">
+      <h2>SETTINGS</h2>
+      <button id="btn-toggle-ghost" class="btn">GHOST TAPPING: ON</button>
+      <p style="font-size:12px; color:#888; max-width:280px; text-align:center;">
+        ON: Tapping keys with no notes does not miss.<br>OFF: Classic FNF strict missing.
+      </p>
+      <button id="btn-settings-back" class="btn" style="border-color:#888; color:#888; margin-top:10px;">BACK</button>
+    </div>
+
+    <!-- 3. FREEPLAY TRACK SELECTOR -->
     <div id="menu-song-select" class="overlay hidden">
       <h2>SELECT TRACK</h2>
       <div id="song-list" class="song-list-container"></div>
       <button id="btn-song-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- 3. CHARACTER SELECT -->
+    <!-- 4. CHARACTER SELECT -->
     <div id="menu-character-select" class="overlay hidden">
       <h2 id="char-select-song-title">CHARACTER SELECT</h2>
       <p id="song-load-error" style="color: #ff5555; font-size: 13px;" class="hidden"></p>
@@ -66,7 +74,7 @@
       <button id="btn-char-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- 4. MULTIPLAYER LOBBY -->
+    <!-- 5. MULTIPLAYER LOBBY -->
     <div id="menu-multi" class="overlay hidden">
       <h2>MULTIPLAYER LOBBY</h2>
       
@@ -79,6 +87,10 @@
       <div id="lobby-room-box" class="hidden" style="display:flex; flex-direction:column; gap:10px; align-items:center;">
         <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line;">Waiting for opponent...</p>
+        
+        <!-- Host-controlled Ghost Tapping in Lobby -->
+        <button id="btn-lobby-ghost" class="btn" style="font-size:12px; border-color:#FFAA00; color:#FFAA00;">GHOST TAPPING: ON (HOST)</button>
+
         <button id="btn-switch-role" class="btn">SWITCH ROLE</button>
         <button id="btn-ready" class="btn btn-ready">TOGGLE READY</button>
       </div>
@@ -86,7 +98,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- 5. MATCH RESULTS -->
+    <!-- 6. MATCH RESULTS -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -104,6 +116,11 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
+    // Persistent Settings (localStorage)
+    let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
+    engine.ghostTapping = userGhostTapping;
+
+    let isRoomHost = false;
     let songCatalog = [];
     let selectedSong = null;
 
@@ -114,6 +131,7 @@
     const btnBootEnter = document.getElementById('btn-boot-enter');
 
     const menuMain = document.getElementById('menu-main');
+    const menuSettings = document.getElementById('menu-settings');
     const menuSongSelect = document.getElementById('menu-song-select');
     const menuCharSelect = document.getElementById('menu-character-select');
     const menuMulti = document.getElementById('menu-multi');
@@ -123,33 +141,42 @@
     const disconnectBanner = document.getElementById('disconnect-banner');
     const songLoadError = document.getElementById('song-load-error');
 
-    // 0. Classic FNF Bouncing Intro Splash Text Sequence
+    const btnToggleGhost = document.getElementById('btn-toggle-ghost');
+    const btnLobbyGhost = document.getElementById('btn-lobby-ghost');
+
+    function updateGhostButtonUI() {
+      btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
+      btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
+      btnToggleGhost.style.borderColor = engine.ghostTapping ? "#55e840" : "#ff5555";
+    }
+    updateGhostButtonUI();
+
+    btnToggleGhost.onclick = () => {
+      engine.ghostTapping = !engine.ghostTapping;
+      localStorage.setItem('ghostTapping', engine.ghostTapping);
+      updateGhostButtonUI();
+    };
+
+    // 0. FNF Intro Splash Text
     const INTRO_SPLASHES = [
-      ["Don't sue me pls", "..."],
-      ["VS IMPOSTOR V4", "FROM TEMU"],
+      ["SHOUTOUTS TO TOM FULP", "LMAO"],
+      ["VS IMPOSTOR V4", "IN YOUR BROWSER"],
       ["CHROMIUM COMPATIBLE", "60 FPS GUARANTEED"],
       ["HIS NAME IS NOT KEITH", "DUMB EGGS"],
-      ["LIMES SUPREMACY", "NOT THAT ONE..."],
+      ["LIMES SUPREMACY", "POLUS MOMENT"],
       ["SAMPLE ACCURATE AUDIO", "ZERO DRIFT BABY"]
     ];
 
-    // Pick two random splashes for the boot intro
     const splash1 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
     let splash2 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
     while (splash2 === splash1) splash2 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
 
     function playIntroSequence() {
-      // Beat 1 (0.8s): First phrase top
       setTimeout(() => { splashTop.innerText = splash1[0]; }, 800);
-      // Beat 2 (1.6s): First phrase bottom
       setTimeout(() => { splashBottom.innerText = splash1[1]; }, 1600);
-      // Beat 3 (2.4s): Clear
       setTimeout(() => { splashTop.innerText = ""; splashBottom.innerText = ""; }, 2400);
-      // Beat 4 (2.8s): Second phrase top
       setTimeout(() => { splashTop.innerText = splash2[0]; }, 2800);
-      // Beat 5 (3.6s): Second phrase bottom
       setTimeout(() => { splashBottom.innerText = splash2[1]; }, 3600);
-      // Beat 6 (4.4s): Reveal Logo & Enter button
       setTimeout(() => {
         splashTop.innerText = "STARGAZER";
         splashTop.style.color = "#55E840";
@@ -160,7 +187,6 @@
     }
     playIntroSequence();
 
-    // Load song catalog
     fetch('assets/songs/songs.json')
       .then(res => res.json())
       .then(data => {
@@ -176,7 +202,6 @@
       menuMain.classList.remove('hidden');
     };
 
-    // Fullscreen Toggle
     document.getElementById('btn-fullscreen').onclick = () => {
       const wrapper = document.getElementById('game-wrapper');
       if (!document.fullscreenElement) {
@@ -188,42 +213,55 @@
       }
     };
 
-    // Mobile Yellow Taunt Button
     document.getElementById('btn-mobile-taunt').onclick = (e) => {
       e.stopPropagation();
       engine.triggerTaunt();
     };
 
-    // Mirror Sprite Toggle Button
     const btnToggleMirror = document.getElementById('btn-toggle-mirror');
     btnToggleMirror.onclick = () => {
       engine.mirrorSprite = !engine.mirrorSprite;
       btnToggleMirror.innerText = `MIRROR SPRITE: ${engine.mirrorSprite ? "ON" : "OFF"}`;
     };
 
-    // Live GitHub Workflow Checker
-    async function checkGitHubUpdates() {
-      const statusEl = document.getElementById('version-status');
-      try {
-        const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`);
-        if (runsRes.ok) {
-          const runsData = await runsRes.json();
-          const latestRun = runsData.workflow_runs && runsData.workflow_runs[0];
-          if (latestRun && (latestRun.status === 'in_progress' || latestRun.status === 'queued')) {
-            statusEl.innerText = "(partial update deploying...)";
-            statusEl.style.color = "#FFAA00";
-            return;
-          }
-        }
-        statusEl.innerText = "(latest)";
-        statusEl.style.color = "#55e840";
-      } catch (err) {
-        statusEl.innerText = "";
-      }
-    }
-    checkGitHubUpdates();
+    // Navigation
+    document.getElementById('btn-to-settings').onclick = () => {
+      menuMain.classList.add('hidden');
+      menuSettings.classList.remove('hidden');
+    };
+    document.getElementById('btn-settings-back').onclick = () => {
+      menuSettings.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
 
-    // Populate Freeplay with Custom Song Banners / Vignettes (banner.png)
+    document.getElementById('btn-to-freeplay').onclick = () => {
+      menuMain.classList.add('hidden');
+      menuSongSelect.classList.remove('hidden');
+      // In Freeplay, restore local ghost tapping setting
+      engine.ghostTapping = (localStorage.getItem('ghostTapping') !== 'false');
+    };
+    document.getElementById('btn-song-back').onclick = () => {
+      menuSongSelect.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
+    document.getElementById('btn-char-back').onclick = () => {
+      menuCharSelect.classList.add('hidden');
+      menuSongSelect.classList.remove('hidden');
+    };
+    document.getElementById('btn-to-multi').onclick = () => {
+      menuMain.classList.add('hidden');
+      menuMulti.classList.remove('hidden');
+    };
+    document.getElementById('btn-multi-back').onclick = () => {
+      menuMulti.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
+    document.getElementById('btn-results-menu').onclick = () => {
+      menuResults.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+      engine.state = 'READY';
+    };
+
     function populateSongList() {
       const listEl = document.getElementById('song-list');
       listEl.innerHTML = '';
@@ -233,12 +271,9 @@
         card.className = 'song-card';
         card.style.borderLeftColor = song.color || '#55e840';
 
-        // Check if banner image exists in song folder
         const bannerUrl = `assets/songs/${song.folder}/banner.png`;
         const testImg = new Image();
-        testImg.onload = () => {
-          card.style.backgroundImage = `url('${bannerUrl}')`;
-        };
+        testImg.onload = () => { card.style.backgroundImage = `url('${bannerUrl}')`; };
         testImg.src = bannerUrl;
 
         card.innerHTML = `
@@ -264,34 +299,6 @@
       });
     }
 
-    // Navigation
-    document.getElementById('btn-to-freeplay').onclick = () => {
-      menuMain.classList.add('hidden');
-      menuSongSelect.classList.remove('hidden');
-    };
-    document.getElementById('btn-song-back').onclick = () => {
-      menuSongSelect.classList.add('hidden');
-      menuMain.classList.remove('hidden');
-    };
-    document.getElementById('btn-char-back').onclick = () => {
-      menuCharSelect.classList.add('hidden');
-      menuSongSelect.classList.remove('hidden');
-    };
-    document.getElementById('btn-to-multi').onclick = () => {
-      menuMain.classList.add('hidden');
-      menuMulti.classList.remove('hidden');
-    };
-    document.getElementById('btn-multi-back').onclick = () => {
-      menuMulti.classList.add('hidden');
-      menuMain.classList.remove('hidden');
-    };
-    document.getElementById('btn-results-menu').onclick = () => {
-      menuResults.classList.add('hidden');
-      menuMain.classList.remove('hidden');
-      engine.state = 'READY';
-    };
-
-    // Freeplay Playback
     async function startFreeplay(role) {
       songLoadError.classList.add('hidden');
       try {
@@ -329,6 +336,19 @@
       }, 400);
     };
 
+    // Host Ghost Tapping Toggle in Lobby
+    btnLobbyGhost.onclick = () => {
+      if (!isRoomHost) return;
+      const current = engine.ghostTapping;
+      network.updateRoomSettings({ ghostTapping: !current });
+    };
+
+    network.onRoomSettingsUpdate = (settings) => {
+      engine.ghostTapping = settings.ghostTapping;
+      btnLobbyGhost.innerText = `GHOST TAPPING: ${settings.ghostTapping ? "ON" : "OFF"} ${isRoomHost ? "(HOST)" : "(LOCKED)"}`;
+      btnLobbyGhost.style.color = settings.ghostTapping ? "#55e840" : "#ff5555";
+    };
+
     document.getElementById('btn-switch-role').onclick = () => network.switchRole();
     document.getElementById('btn-ready').onclick = () => network.toggleReady();
 
@@ -342,17 +362,28 @@
       }
     };
 
-    network.onRoomUpdate = ({ players }) => {
+    network.onRoomUpdate = ({ players, settings, hostId }) => {
+      isRoomHost = (network.localId === hostId);
       const me = players.find(p => p.id === network.localId);
       if (me) {
         engine.setRole(me.role);
         lobbyStatusText.innerText = `You are: ${me.role.toUpperCase()} | Ready: ${me.ready ? "YES" : "NO"}\nPlayers in Room: ${players.length}/2`;
       }
+      if (settings) {
+        engine.ghostTapping = settings.ghostTapping;
+        btnLobbyGhost.innerText = `GHOST TAPPING: ${settings.ghostTapping ? "ON" : "OFF"} ${isRoomHost ? "(HOST)" : "(LOCKED)"}`;
+        btnLobbyGhost.style.color = settings.ghostTapping ? "#55e840" : "#ff5555";
+        btnLobbyGhost.style.cursor = isRoomHost ? "pointer" : "default";
+      }
     };
 
-    network.onMatchStarting = async ({ startTimestamp }) => {
+    network.onMatchStarting = async ({ startTimestamp, settings }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
+
+      if (settings) {
+        engine.ghostTapping = settings.ghostTapping;
+      }
 
       await engine.loadAssets(selectedSong || songCatalog[0]);
 
@@ -364,11 +395,8 @@
     };
 
     network.onOpponentHit = (data) => {
-      if (data.type === 'taunt') {
-        engine.handleOpponentTaunt(data);
-      } else {
-        engine.handleOpponentNoteHit(data);
-      }
+      if (data.type === 'taunt') engine.handleOpponentTaunt(data);
+      else engine.handleOpponentNoteHit(data);
     };
 
     network.onOpponentDisconnected = () => disconnectBanner.classList.remove('hidden');
