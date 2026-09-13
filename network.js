@@ -1,6 +1,6 @@
 /**
- * network.js (Added Custom Skin Sync & Host Song Controls)
- * Save in ROOT folder
+ * network.js
+ * Full Network Manager with NTP Clock Calibration and Handshake Support
  */
 
 export class NetworkManager {
@@ -9,15 +9,16 @@ export class NetworkManager {
     this.connected = false;
     this.roomCode = null;
     this.localId = null;
+    this.serverTimeOffset = 0;
 
     this.onRoomUpdate = null;
     this.onRoomSettingsUpdate = null;
     this.onOpponentSkin = null;
+    this.onHandshakeCheck = null;
     this.onMatchStarting = null;
     this.onOpponentHit = null;
     this.onOpponentDisconnected = null;
     this.onOpponentReconnected = null;
-    this.onOpponentForfeit = null;
     this.onMatchResults = null;
     this.onError = null;
   }
@@ -32,6 +33,18 @@ export class NetworkManager {
     this.socket.on('connect', () => {
       this.connected = true;
       this.localId = this.socket.id;
+      this.syncClockWithServer();
+    });
+
+    this.socket.on('sync_pong', ({ clientSendTime, serverTime }) => {
+      const now = Date.now();
+      const roundTrip = now - clientSendTime;
+      const oneWayLatency = roundTrip / 2;
+      this.serverTimeOffset = (serverTime + oneWayLatency) - now;
+    });
+
+    this.socket.on('handshake_check', () => {
+      if (this.onHandshakeCheck) this.onHandshakeCheck();
     });
 
     this.socket.on('error_message', (msg) => {
@@ -66,13 +79,23 @@ export class NetworkManager {
       if (this.onOpponentReconnected) this.onOpponentReconnected();
     });
 
-    this.socket.on('opponent_forfeited', (data) => {
-      if (this.onOpponentForfeit) this.onOpponentForfeit(data);
-    });
-
     this.socket.on('match_results', (data) => {
       if (this.onMatchResults) this.onMatchResults(data);
     });
+  }
+
+  syncClockWithServer() {
+    if (!this.socket || !this.connected) return;
+    this.socket.emit('sync_ping', Date.now());
+  }
+
+  getSyncedServerTime() {
+    return Date.now() + this.serverTimeOffset;
+  }
+
+  sendHandshakeAck() {
+    if (!this.socket) return;
+    this.socket.emit('handshake_ack');
   }
 
   joinRoom(roomCode, preferredRole = 'bf', customSkin = null) {
