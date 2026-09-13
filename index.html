@@ -48,9 +48,16 @@
       <button id="btn-to-settings" class="btn" style="border-color:#555; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER -->
+    <!-- 2. CUSTOM SKIN UPLOADER (WITH 3 LOADOUT SLOTS) -->
     <div id="menu-skins" class="overlay hidden">
       <h2>CUSTOM SKIN SLOTS</h2>
+      
+      <!-- 3 Skin Slot Buttons -->
+      <div style="display:flex; gap:8px; margin-bottom:4px;">
+        <button id="btn-slot-1" class="btn slot-btn active">SLOT 1</button>
+        <button id="btn-slot-2" class="btn slot-btn">SLOT 2</button>
+        <button id="btn-slot-3" class="btn slot-btn">SLOT 3</button>
+      </div>
       
       <div class="skin-slots-container">
         <div class="skin-slot-row">
@@ -119,7 +126,7 @@
       </div>
 
       <div style="display:flex; gap:10px; margin-top:6px;">
-        <button id="btn-clear-skins" class="btn" style="border-color:#ff5555; color:#ff5555; min-width:140px; font-size:12px; padding:6px 12px;">RESET ALL</button>
+        <button id="btn-clear-skins" class="btn" style="border-color:#ff5555; color:#ff5555; min-width:140px; font-size:12px; padding:6px 12px;">RESET THIS SLOT</button>
         <button id="btn-skins-back" class="btn" style="border-color:#555; color:#888; min-width:140px; font-size:12px; padding:6px 12px;">BACK</button>
       </div>
     </div>
@@ -167,7 +174,6 @@
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
         <p id="lobby-preload-status" style="color:#55e840; font-size:12px; font-weight:bold;">Track Ready ✓</p>
         
-        <!-- Host Track Chooser -->
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:13px; color:#FDE871;">TRACK:</span>
           <select id="select-lobby-song" style="background:#101216; color:#fff; border:1px solid #363c4a; padding:6px; font-family:inherit; border-radius:4px; font-size:13px;"></select>
@@ -199,15 +205,27 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
+    // Settings
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
 
     let userMobileMode = localStorage.getItem('mobileControlsMode') || 'auto';
     engine.mobileControlsMode = userMobileMode;
 
-    let localSkinData = JSON.parse(localStorage.getItem('customSkin') || '{}');
-    if (Object.keys(localSkinData).length > 0) {
-      engine.setSkin('local', localSkinData);
+    // 3 Skin Slots Storage Management
+    let currentSlot = parseInt(localStorage.getItem('equippedSkinSlot') || '1');
+    
+    function getSlotData(slotNum) {
+      return JSON.parse(localStorage.getItem(`customSkin_slot_${slotNum}`) || '{}');
+    }
+
+    function saveSlotData(slotNum, data) {
+      localStorage.setItem(`customSkin_slot_${slotNum}`, JSON.stringify(data));
+    }
+
+    let activeSkinData = getSlotData(currentSlot);
+    if (Object.keys(activeSkinData).length > 0) {
+      engine.setSkin('local', activeSkinData);
     }
 
     let isRoomHost = false;
@@ -240,6 +258,34 @@
     const selectLobbySong = document.getElementById('select-lobby-song');
     const lobbyPreloadStatus = document.getElementById('lobby-preload-status');
     const btnMobileTaunt = document.getElementById('btn-mobile-taunt');
+
+    const slotButtons = [
+      document.getElementById('btn-slot-1'),
+      document.getElementById('btn-slot-2'),
+      document.getElementById('btn-slot-3')
+    ];
+
+    function selectSlot(slotNum) {
+      currentSlot = slotNum;
+      localStorage.setItem('equippedSkinSlot', slotNum.toString());
+
+      slotButtons.forEach((btn, idx) => {
+        if (idx + 1 === slotNum) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+
+      activeSkinData = getSlotData(slotNum);
+      engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null };
+      if (Object.keys(activeSkinData).length > 0) {
+        engine.setSkin('local', activeSkinData);
+      }
+      updateSkinSlotStatuses();
+    }
+
+    slotButtons[0].onclick = () => selectSlot(1);
+    slotButtons[1].onclick = () => selectSlot(2);
+    slotButtons[2].onclick = () => selectSlot(3);
+    selectSlot(currentSlot); // Initialize active slot button
 
     function updateMobileButtonVisibility() {
       if (engine.shouldShowMobileUI()) {
@@ -281,7 +327,7 @@
     function updateSkinSlotStatuses() {
       SLOTS.forEach(slot => {
         const statusEl = document.getElementById(`status-${slot}`);
-        if (localSkinData && localSkinData[slot]) {
+        if (activeSkinData && activeSkinData[slot]) {
           statusEl.innerText = "CUSTOM ✓";
           statusEl.style.color = "#55e840";
         } else {
@@ -300,9 +346,9 @@
 
         const reader = new FileReader();
         reader.onload = (event) => {
-          localSkinData[slot] = event.target.result;
-          localStorage.setItem('customSkin', JSON.stringify(localSkinData));
-          engine.setSkin('local', localSkinData);
+          activeSkinData[slot] = event.target.result;
+          saveSlotData(currentSlot, activeSkinData);
+          engine.setSkin('local', activeSkinData);
           updateSkinSlotStatuses();
         };
         reader.readAsDataURL(file);
@@ -310,8 +356,8 @@
     });
 
     document.getElementById('btn-clear-skins').onclick = () => {
-      localSkinData = {};
-      localStorage.removeItem('customSkin');
+      activeSkinData = {};
+      saveSlotData(currentSlot, activeSkinData);
       engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null };
       updateSkinSlotStatuses();
     };
@@ -346,7 +392,6 @@
     }
     playIntroSequence();
 
-    // Fast Non-Hanging GitHub Checker with Timeout
     async function checkGitHubUpdates() {
       const statusEl = document.getElementById('version-status');
       const controller = new AbortController();
@@ -552,7 +597,8 @@
 
       network.connect(serverUrl);
       setTimeout(() => {
-        network.joinRoom(code, 'bf', localSkinData);
+        // Transmit currently equipped skin slot to opponent
+        network.joinRoom(code, 'bf', activeSkinData);
         lobbyConnectBox.classList.add('hidden');
         lobbyRoomBox.classList.remove('hidden');
         lobbyRoomTitle.innerText = `ROOM: ${code.toUpperCase()}`;
@@ -632,6 +678,10 @@
 
       if (settings) {
         engine.ghostTapping = settings.ghostTapping;
+        const targetSong = songCatalog.find(s => s.id === settings.selectedSongId) || songCatalog[0];
+        await engine.loadAssets(targetSong);
+      } else {
+        await engine.loadAssets(songCatalog[0]);
       }
 
       const delayMs = startTimestamp - Date.now();
