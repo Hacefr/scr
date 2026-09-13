@@ -205,14 +205,9 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // Settings
-    let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
-    engine.ghostTapping = userGhostTapping;
+    // 1. SKIN SLOTS CONSTANTS & FUNCTIONS (DECLARED FIRST TO AVOID TDZ ERROR)
+    const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
 
-    let userMobileMode = localStorage.getItem('mobileControlsMode') || 'auto';
-    engine.mobileControlsMode = userMobileMode;
-
-    // 3 Skin Slots Storage Management
     let currentSlot = parseInt(localStorage.getItem('equippedSkinSlot') || '1');
     
     function getSlotData(slotNum) {
@@ -224,6 +219,29 @@
     }
 
     let activeSkinData = getSlotData(currentSlot);
+
+    function updateSkinSlotStatuses() {
+      SLOTS.forEach(slot => {
+        const statusEl = document.getElementById(`status-${slot}`);
+        if (statusEl) {
+          if (activeSkinData && activeSkinData[slot]) {
+            statusEl.innerText = "CUSTOM ✓";
+            statusEl.style.color = "#55e840";
+          } else {
+            statusEl.innerText = "DEFAULT";
+            statusEl.style.color = "#777";
+          }
+        }
+      });
+    }
+
+    // Settings
+    let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
+    engine.ghostTapping = userGhostTapping;
+
+    let userMobileMode = localStorage.getItem('mobileControlsMode') || 'auto';
+    engine.mobileControlsMode = userMobileMode;
+
     if (Object.keys(activeSkinData).length > 0) {
       engine.setSkin('local', activeSkinData);
     }
@@ -270,8 +288,10 @@
       localStorage.setItem('equippedSkinSlot', slotNum.toString());
 
       slotButtons.forEach((btn, idx) => {
-        if (idx + 1 === slotNum) btn.classList.add('active');
-        else btn.classList.remove('active');
+        if (btn) {
+          if (idx + 1 === slotNum) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
       });
 
       activeSkinData = getSlotData(slotNum);
@@ -285,7 +305,7 @@
     slotButtons[0].onclick = () => selectSlot(1);
     slotButtons[1].onclick = () => selectSlot(2);
     slotButtons[2].onclick = () => selectSlot(3);
-    selectSlot(currentSlot); // Initialize active slot button
+    selectSlot(currentSlot); // Safely initialize slot
 
     function updateMobileButtonVisibility() {
       if (engine.shouldShowMobileUI()) {
@@ -323,36 +343,23 @@
       updateGhostButtonUI();
     };
 
-    const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
-    function updateSkinSlotStatuses() {
-      SLOTS.forEach(slot => {
-        const statusEl = document.getElementById(`status-${slot}`);
-        if (activeSkinData && activeSkinData[slot]) {
-          statusEl.innerText = "CUSTOM ✓";
-          statusEl.style.color = "#55e840";
-        } else {
-          statusEl.innerText = "DEFAULT";
-          statusEl.style.color = "#777";
-        }
-      });
-    }
-    updateSkinSlotStatuses();
-
     SLOTS.forEach(slot => {
       const input = document.getElementById(`slot-${slot}`);
-      input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+      if (input) {
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          activeSkinData[slot] = event.target.result;
-          saveSlotData(currentSlot, activeSkinData);
-          engine.setSkin('local', activeSkinData);
-          updateSkinSlotStatuses();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            activeSkinData[slot] = event.target.result;
+            saveSlotData(currentSlot, activeSkinData);
+            engine.setSkin('local', activeSkinData);
+            updateSkinSlotStatuses();
+          };
+          reader.readAsDataURL(file);
         };
-        reader.readAsDataURL(file);
-      };
+      }
     });
 
     document.getElementById('btn-clear-skins').onclick = () => {
@@ -392,6 +399,7 @@
     }
     playIntroSequence();
 
+    // Fast Non-Hanging GitHub Checker
     async function checkGitHubUpdates() {
       const statusEl = document.getElementById('version-status');
       const controller = new AbortController();
@@ -400,7 +408,7 @@
       try {
         const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`, { signal: controller.signal });
         clearTimeout(timer);
-        if (res.ok) {
+        if (res && res.ok) {
           const data = await res.json();
           const run = data.workflow_runs && data.workflow_runs[0];
           if (run && (run.status === 'in_progress' || run.status === 'queued')) {
@@ -563,7 +571,7 @@
     document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
     document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
 
-    // Multiplayer Flow
+    // Multiplayer Flow & Preloading
     const lobbyConnectBox = document.getElementById('lobby-connect-box');
     const lobbyRoomBox = document.getElementById('lobby-room-box');
     const lobbyRoomTitle = document.getElementById('lobby-room-title');
@@ -597,7 +605,6 @@
 
       network.connect(serverUrl);
       setTimeout(() => {
-        // Transmit currently equipped skin slot to opponent
         network.joinRoom(code, 'bf', activeSkinData);
         lobbyConnectBox.classList.add('hidden');
         lobbyRoomBox.classList.remove('hidden');
