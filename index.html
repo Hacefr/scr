@@ -7,6 +7,15 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    /* Makes pixel art stay crisp on canvas without blurring */
+    canvas {
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
 </head>
 <body>
 
@@ -53,7 +62,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- MATCH RESULTS OVERLAY (WITH VICTORY / DEFEAT) -->
+    <!-- MATCH RESULTS OVERLAY (VICTORY / DEFEAT) -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -112,6 +121,7 @@
       engine.state = 'READY';
     };
 
+    // Singleplayer with 3-2-1-GO Countdown
     async function startSinglePlayer(role) {
       singleLoadingStatus.innerText = "Buffering audio tracks, please wait...";
       await assetLoadPromise;
@@ -119,7 +129,8 @@
       menuSingle.classList.add('hidden');
       engine.gameMode = 'single';
       engine.setRole(role);
-      await engine.start();
+      // Triggers 2.4s "3, 2, 1, GO!" countdown
+      await engine.startWithCountdown(2.4);
     }
 
     document.getElementById('btn-single-bf').onclick = () => startSinglePlayer('bf');
@@ -157,6 +168,7 @@
       }
     };
 
+    // Multiplayer with Synchronized 3-2-1-GO Countdown
     network.onMatchStarting = async ({ startTimestamp }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
@@ -164,12 +176,12 @@
       await assetLoadPromise;
 
       const delayMs = startTimestamp - Date.now();
-      const scheduledAudioTime = engine.audio.ctx.currentTime + Math.max(0.05, delayMs / 1000);
+      const delaySeconds = Math.max(0.1, delayMs / 1000);
+      const scheduledAudioTime = engine.audio.ctx.currentTime + delaySeconds;
 
-      await engine.start(scheduledAudioTime);
+      await engine.startWithCountdown(delaySeconds, scheduledAudioTime);
     };
 
-    // Relay Opponent Note Hits directly into Engine (Flashes Receptor!)
     network.onOpponentHit = (data) => {
       engine.handleOpponentNoteHit(data);
     };
@@ -185,7 +197,6 @@
       alert(message);
     };
 
-    // Winner & Breakdown Screen
     network.onMatchResults = ({ winnerId, players }) => {
       const me = players.find(p => p.id === network.localId);
       const opponent = players.find(p => p.id !== network.localId);
@@ -227,7 +238,6 @@
         if (engine.gameMode === 'multiplayer') {
           network.sendFinished(engine.score, engine.accuracy);
         } else {
-          // Singleplayer Result
           resultsTitle.innerText = "SONG COMPLETE! 🎵";
           resultsTitle.style.color = "#66fcf1";
           resultsBody.innerHTML = `
