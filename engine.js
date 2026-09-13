@@ -2,6 +2,7 @@
  * engine.js
  * Core Canvas Rhythm Game Engine
  * Features:
+ * - Full Hold / Sustain Note trails and holding mechanics
  * - Dynamic Multi-Song loader with custom bg.png
  * - Host & Freeplay Ghost Tapping toggle
  * - Grounded, auto-facing character rendering (notes render on top!)
@@ -116,7 +117,6 @@ export class RhythmEngine {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
 
-      // Keybind T: Taunt
       if (e.code === 'KeyT') {
         if (this.state === 'PLAYING' || this.state === 'COUNTDOWN') {
           this.triggerTaunt();
@@ -211,16 +211,12 @@ export class RhythmEngine {
     }
   }
 
-  /**
-   * Loads assets dynamically for any song from songs.json
-   */
   async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
     this.currentSong = songData;
     this.state = 'LOADING';
     const folder = songData.folder || "stargazer";
     const chartFile = songData.chart || "normal.json";
 
-    // Attempt to load stage background (assets/songs/<folder>/bg.png)
     this.hasBg = false;
     this.stageBg = new Image();
     this.stageBg.onload = () => { this.hasBg = true; };
@@ -244,7 +240,6 @@ export class RhythmEngine {
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
 
-      // Reset gameplay state
       this.pool.clear();
       this.spawnIndex = 0;
       this.score = 0;
@@ -271,7 +266,6 @@ export class RhythmEngine {
     const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
     this.audio.playAt(scheduledTime);
 
-    // Pop-up song credit card for 4 seconds
     this.creditCardTimer = 4.0;
   }
 
@@ -294,7 +288,13 @@ export class RhythmEngine {
 
     if (hitNote) {
       hitNote.hit = true;
-      hitNote.kill();
+
+      // If it's a sustain note, mark it as actively holding
+      if (hitNote.sustainLength > 0) {
+        hitNote.isHolding = true;
+      } else {
+        hitNote.kill();
+      }
 
       let rating = "shit";
       let pts = 50;
@@ -324,7 +324,6 @@ export class RhythmEngine {
         this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
       }
     } else {
-      // ONLY MISS IF GHOST TAPPING IS DISABLED!
       if (!this.ghostTapping) {
         this.score = Math.max(0, this.score - 50);
         this.combo = 0;
@@ -359,7 +358,11 @@ export class RhythmEngine {
     this.pool.forEachActive(note => {
       if (note.isPlayer === targetIsPlayer && note.lane === lane && !note.hit) {
         note.hit = true;
-        note.kill();
+        if (note.sustainLength > 0) {
+          note.isHolding = true;
+        } else {
+          note.kill();
+        }
       }
     });
   }
@@ -402,6 +405,7 @@ export class RhythmEngine {
       return;
     }
 
+    // Spawn window calculation
     const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -409,6 +413,7 @@ export class RhythmEngine {
         const visual = this.pool.obtain();
         if (visual) {
           visual.spawn(data.id, data.time, data.lane, data.isPlayer, data.sustainLength);
+          visual.isHolding = false;
         }
         this.spawnIndex++;
       } else {
@@ -423,19 +428,55 @@ export class RhythmEngine {
       note.y = this.receptorY + distance;
 
       const isBotNote = (note.isPlayer !== humanIsPlayer);
+      const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
-      if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
-        note.hit = true;
-        if (note.isPlayer) {
-          this.bfPoseTimer = 0.3;
-          this.opponentKeyTimers[note.lane] = 0.15;
+      // 1. ACTIVE SUSTAIN HOLD LOGIC
+      if (note.isHolding) {
+        // Keep character singing and award continuous points
+        if (!isBotNote) {
+          // Check if human is still holding the corresponding key/lane
+          if (this.keysHeld[note.lane]) {
+            this.score += Math.round(180 * dt);
+            if (humanIsPlayer) this.bfPoseTimer = 0.2;
+            else this.limesPoseTimer = 0.2;
+
+            // Note hold finished successfully!
+            if (songTime >= noteEndTime) {
+              note.isHolding = false;
+              note.kill();
+            }
+          } else {
+            // Player let go of hold note early
+            note.isHolding = false;
+            note.kill();
+          }
         } else {
-          this.limesPoseTimer = 0.3;
-          this.opponentKeyTimers[note.lane] = 0.15;
+          // Bot holding
+          if (songTime < noteEndTime) {
+            if (humanIsPlayer) this.limesPoseTimer = 0.2;
+            else this.bfPoseTimer = 0.2;
+            this.opponentKeyTimers[note.lane] = 0.15;
+          } else {
+            note.isHolding = false;
+            note.kill();
+          }
         }
-        note.kill();
       }
 
+      // 2. BOT AUTO-HIT FOR UNHIT NOTES
+      if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
+        note.hit = true;
+        if (note.sustainLength > 0) {
+          note.isHolding = true;
+        } else {
+          if (note.isPlayer) this.bfPoseTimer = 0.3;
+          else this.limesPoseTimer = 0.3;
+          this.opponentKeyTimers[note.lane] = 0.15;
+          note.kill();
+        }
+      }
+
+      // 3. HUMAN MISS CHECK
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -464,7 +505,7 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // 1. LAYER 1: Background
+    // 1. Stage Background
     if (this.hasBg) {
       ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -479,10 +520,10 @@ export class RhythmEngine {
       return;
     }
 
-    // 2. LAYER 2: Characters (Grounded behind the notes)
+    // 2. Characters (Grounded behind notes)
     this.renderCharacters(ctx);
 
-    // 3. LAYER 3: Touch Hitboxes
+    // 3. Mobile Touch Hitboxes
     if (this.isTouchDevice) {
       this.renderTouchHitboxes(ctx);
     }
@@ -490,7 +531,7 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // 4. LAYER 4: Receptors (Target Arrows)
+    // 4. Receptors (Target Arrows)
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
@@ -502,14 +543,47 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // 5. LAYER 5: Rising Notes (Always drawn on top of characters!)
+    // 5. Rising Notes WITH SUSTAIN TRAILS (Rendered ON TOP of characters!)
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
-      this.drawArrow(ctx, x, note.y, note.lane, false, false);
+
+      // Draw Hold / Sustain Trail
+      if (note.sustainLength > 0) {
+        const fullTrailHeight = note.sustainLength * (160 * this.speed);
+        let startY = note.y + 24;
+        let trailH = fullTrailHeight;
+
+        // If currently holding, trail feeds smoothly into receptor
+        if (note.isHolding) {
+          startY = this.receptorY + 24;
+          const remainingTime = (note.strumTime + note.sustainLength) - this.audio.getCurrentSongTime();
+          trailH = Math.max(0, remainingTime * (160 * this.speed));
+        }
+
+        if (trailH > 0 && !note.missed) {
+          ctx.save();
+          ctx.fillStyle = ARROW_COLORS[note.lane];
+          ctx.globalAlpha = 0.65;
+
+          // Main vertical trail
+          ctx.fillRect(x + 18, startY, 12, trailH);
+
+          // Rounded bottom end-cap
+          ctx.beginPath();
+          ctx.arc(x + 24, startY + trailH, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // Draw Arrow Head (only if not already held down)
+      if (!note.isHolding) {
+        this.drawArrow(ctx, x, note.y, note.lane, false, false);
+      }
     });
 
-    // 6. LAYER 6: HUD & Notifications
+    // 6. HUD & Notifications
     this.renderHUD(ctx);
 
     if (this.creditCardTimer > 0) {
@@ -627,8 +701,8 @@ export class RhythmEngine {
     if (this.mirrorSprite) ctx.scale(-1, 1);
 
     ctx.globalAlpha = 0.85;
-    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow Taunt
-    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555'; // Dark Miss
+    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00';
+    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555';
     else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
 
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
@@ -640,11 +714,11 @@ export class RhythmEngine {
     // RIGHT: Boyfriend
     ctx.save();
     ctx.translate(580, groundY);
-    if (!this.mirrorSprite) ctx.scale(-1, 1); // Mirrored by default so BF faces Left!
+    if (!this.mirrorSprite) ctx.scale(-1, 1);
 
     ctx.globalAlpha = 0.85;
-    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow Taunt
-    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555'; // Dark Miss
+    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
+    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
     else ctx.fillStyle = this.bfPoseTimer > 0 ? '#38A8FF' : '#175294';
 
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
