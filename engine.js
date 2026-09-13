@@ -1,5 +1,5 @@
 /**
- * engine.js (Taunt System, Miss Poses, Fit-To-Frame Scaling & Mirroring)
+ * engine.js (Added Stage bg.png, Floor Anchoring & Mobile-Only Taunt)
  * Save in ROOT folder
  */
 
@@ -41,7 +41,11 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Current Song & Pop-Up Card
+    // Background Stage Image
+    this.stageBg = new Image();
+    this.hasBg = false;
+
+    // Current Song Info & Pop-Up Card
     this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
     this.creditCardTimer = 0;
 
@@ -67,7 +71,7 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Pose & Animation States
+    // Pose & Animation Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
     this.bfMissTimer = 0;
@@ -75,7 +79,6 @@ export class RhythmEngine {
     this.bfTauntTimer = 0;
     this.limesTauntTimer = 0;
 
-    // Manual Mirror Toggle
     this.mirrorSprite = false;
 
     // Opponent Live Tracking
@@ -101,7 +104,6 @@ export class RhythmEngine {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
 
-      // Keybind T: Taunt
       if (e.code === 'KeyT') {
         if (this.state === 'PLAYING' || this.state === 'COUNTDOWN') {
           this.triggerTaunt();
@@ -137,6 +139,10 @@ export class RhythmEngine {
     const handleTouchStart = (e) => {
       e.preventDefault();
       this.isTouchDevice = true;
+
+      // Reveal mobile yellow taunt button when touch is used
+      const tauntBtn = document.getElementById('btn-mobile-taunt');
+      if (tauntBtn) tauntBtn.style.display = 'flex';
 
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
@@ -198,6 +204,13 @@ export class RhythmEngine {
     this.state = 'LOADING';
     const folder = songData.folder || "stargazer";
     const chartFile = songData.chart || "normal.json";
+
+    // Attempt to load song background (bg.png)
+    this.hasBg = false;
+    this.stageBg = new Image();
+    this.stageBg.onload = () => { this.hasBg = true; };
+    this.stageBg.onerror = () => { this.hasBg = false; };
+    this.stageBg.src = `assets/songs/${folder}/bg.png`;
 
     try {
       this.loadingStatus = `Loading ${songData.name} audio...`;
@@ -294,7 +307,6 @@ export class RhythmEngine {
         this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
       }
     } else {
-      // Miss penalty & miss animation trigger
       this.score = Math.max(0, this.score - 50);
       this.combo = 0;
       this.hits.miss++;
@@ -416,7 +428,6 @@ export class RhythmEngine {
       }
     });
 
-    // Pose and timer tickdowns
     if (this.bfPoseTimer > 0) this.bfPoseTimer -= dt;
     if (this.limesPoseTimer > 0) this.limesPoseTimer -= dt;
     if (this.bfMissTimer > 0) this.bfMissTimer -= dt;
@@ -432,8 +443,16 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    ctx.fillStyle = '#111318';
-    ctx.fillRect(0, 0, this.width, this.height);
+    // Render Stage Background (bg.png) or fallback
+    if (this.hasBg) {
+      ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
+      // Subtle dim so notes pop
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, this.width, this.height);
+    } else {
+      ctx.fillStyle = '#111318';
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
 
     if (this.state === 'LOADING' || this.state === 'ERROR') {
       this.renderLoadingScreen(ctx);
@@ -498,7 +517,7 @@ export class RhythmEngine {
     const currentY = 20;
 
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(10, 12, 16, 0.85)';
+    ctx.fillStyle = 'rgba(10, 12, 16, 0.88)';
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(currentX, currentY, cardWidth, cardHeight, 6) : ctx.rect(currentX, currentY, cardWidth, cardHeight);
     ctx.fill();
@@ -573,21 +592,18 @@ export class RhythmEngine {
     ctx.restore();
   }
 
-  /**
-   * Character Renderer (Handles Scaling, Floor Anchoring, and Mirroring)
-   */
   renderCharacters(ctx) {
     const groundY = 460;
     const boxW = 100;
     const boxH = 140;
 
-    // LEFT: Limes (Faces Right toward BF)
+    // LEFT: Limes
     ctx.save();
-    ctx.translate(170, groundY); // Center of Limes box
+    ctx.translate(170, groundY);
     if (this.mirrorSprite) ctx.scale(-1, 1);
 
-    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow taunt flash
-    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555'; // Dark miss color
+    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00';
+    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555';
     else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
 
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
@@ -596,10 +612,10 @@ export class RhythmEngine {
     ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), -boxW / 2 + 15, -60);
     ctx.restore();
 
-    // RIGHT: Boyfriend (Faces Left toward Limes)
+    // RIGHT: Boyfriend
     ctx.save();
-    ctx.translate(570, groundY); // Center of BF box
-    if (!this.mirrorSprite) ctx.scale(-1, 1); // Mirrored by default so BF looks Left!
+    ctx.translate(570, groundY);
+    if (!this.mirrorSprite) ctx.scale(-1, 1);
 
     if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
     else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
