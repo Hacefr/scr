@@ -33,7 +33,7 @@
     <div id="screen-boot" class="overlay">
       <div class="splash-container">
         <div id="splash-top" class="splash-line"></div>
-        <div id="splash-bottom" class="splash-line" style="color: #66fcf1;"></div>
+        <div id="splash-bottom" class="splash-line" style="color: #FDE871;"></div>
       </div>
       <button id="btn-boot-enter" class="btn hidden" style="margin-top: 25px; border-color: #55e840; color: #55e840; font-size: 16px;">CLICK OR TAP TO ENTER</button>
     </div>
@@ -41,11 +41,11 @@
     <!-- 1. MAIN MENU -->
     <div id="menu-main" class="overlay hidden">
       <h1>STARGAZER</h1>
-      <p style="color: #888;">Low-End Optimized 1v1 Rhythm Engine</p>
+      <p style="color: #888; font-size: 13px; letter-spacing: 1px;">VS IMPOSTOR V4 - 1v1 ENGINE</p>
       <button id="btn-to-freeplay" class="btn">FREEPLAY (TRACKS)</button>
       <button id="btn-to-multi" class="btn">MULTIPLAYER (1v1)</button>
-      <button id="btn-to-skins" class="btn" style="border-color:#FFAA00; color:#FFAA00;">🎨 CUSTOM SKINS</button>
-      <button id="btn-to-settings" class="btn" style="border-color:#888; color:#aaa;">⚙️ SETTINGS</button>
+      <button id="btn-to-skins" class="btn" style="border-color:#FDE871; color:#FDE871;">🎨 CUSTOM SKINS</button>
+      <button id="btn-to-settings" class="btn" style="border-color:#555; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
     <!-- 2. CUSTOM SKIN UPLOADER -->
@@ -102,7 +102,7 @@
         </div>
 
         <div class="skin-slot-row">
-          <span class="skin-slot-label" style="color:#FFDD00;">TAUNT POSE:</span>
+          <span class="skin-slot-label" style="color:#FDE871;">TAUNT POSE:</span>
           <div>
             <span id="status-taunt" class="skin-slot-status">DEFAULT</span>
             <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-taunt" class="skin-slot-input" accept="image/png"></label>
@@ -110,7 +110,7 @@
         </div>
 
         <div class="skin-slot-row">
-          <span class="skin-slot-label" style="color:#66fcf1;">BAR ICON:</span>
+          <span class="skin-slot-label" style="color:#55e840;">BAR ICON:</span>
           <div>
             <span id="status-icon" class="skin-slot-status">DEFAULT</span>
             <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-icon" class="skin-slot-input" accept="image/png"></label>
@@ -120,26 +120,26 @@
 
       <div style="display:flex; gap:10px; margin-top:6px;">
         <button id="btn-clear-skins" class="btn" style="border-color:#ff5555; color:#ff5555; min-width:140px; font-size:12px; padding:6px 12px;">RESET ALL</button>
-        <button id="btn-skins-back" class="btn" style="border-color:#888; color:#888; min-width:140px; font-size:12px; padding:6px 12px;">BACK</button>
+        <button id="btn-skins-back" class="btn" style="border-color:#555; color:#888; min-width:140px; font-size:12px; padding:6px 12px;">BACK</button>
       </div>
     </div>
 
-    <!-- 3. SETTINGS MENU (WITH GHOST TAPPING + MOBILE CONTROLS TOGGLE) -->
+    <!-- 3. SETTINGS MENU -->
     <div id="menu-settings" class="overlay hidden">
       <h2>SETTINGS</h2>
       <button id="btn-toggle-ghost" class="btn">GHOST TAPPING: ON</button>
-      <button id="btn-toggle-mobile-mode" class="btn" style="border-color:#45f3ff; color:#45f3ff;">MOBILE CONTROLS: AUTO</button>
+      <button id="btn-toggle-mobile-mode" class="btn" style="border-color:#FDE871; color:#FDE871;">MOBILE CONTROLS: AUTO</button>
       <p style="font-size:12px; color:#888; max-width:300px; text-align:center;">
-        AUTO: Enabled only on touchscreens.<br>ON: Force touch buttons.<br>OFF: Pure keyboard mode.
+        AUTO: Enabled on touchscreens.<br>ON: Force touch buttons.<br>OFF: Pure keyboard mode.
       </p>
-      <button id="btn-settings-back" class="btn" style="border-color:#888; color:#888; margin-top:6px;">BACK</button>
+      <button id="btn-settings-back" class="btn" style="border-color:#555; color:#888; margin-top:6px;">BACK</button>
     </div>
 
     <!-- 4. FREEPLAY TRACK SELECTOR -->
     <div id="menu-song-select" class="overlay hidden">
       <h2>SELECT TRACK</h2>
       <div id="song-list" class="song-list-container"></div>
-      <button id="btn-song-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+      <button id="btn-song-back" class="btn" style="border-color:#555; color:#888;">BACK</button>
     </div>
 
     <!-- 5. CHARACTER SELECT -->
@@ -148,8 +148,8 @@
       <p id="song-load-error" style="color: #ff5555; font-size: 13px;" class="hidden"></p>
       <button id="btn-freeplay-bf" class="btn">BOYFRIEND (RIGHT)</button>
       <button id="btn-freeplay-limes" class="btn">LIMES (LEFT)</button>
-      <button id="btn-toggle-mirror" class="btn" style="border-color:#FFAA00; color:#FFAA00; font-size:12px;">MIRROR SPRITE: OFF</button>
-      <button id="btn-char-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+      <button id="btn-toggle-mirror" class="btn" style="border-color:#FDE871; color:#FDE871; font-size:12px;">MIRROR SPRITE: OFF</button>
+      <button id="btn-char-back" class="btn" style="border-color:#555; color:#888;">BACK</button>
     </div>
 
     <!-- 6. MULTIPLAYER LOBBY -->
@@ -163,14 +163,14 @@
       </div>
 
       <div id="lobby-room-box" class="hidden" style="display:flex; flex-direction:column; gap:8px; align-items:center;">
-        <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
+        <p id="lobby-room-title" style="color:#FDE871; font-weight:bold;"></p>
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
         <p id="lobby-preload-status" style="color:#55e840; font-size:12px; font-weight:bold;">Track Ready ✓</p>
         
-        <!-- Host Song Chooser -->
+        <!-- Host Track Chooser -->
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:13px; color:#45f3ff;">TRACK:</span>
-          <select id="select-lobby-song" style="background:#0b0c10; color:#fff; border:1px solid #45a29e; padding:6px; font-family:monospace; border-radius:4px; font-size:13px;"></select>
+          <span style="font-size:13px; color:#FDE871;">TRACK:</span>
+          <select id="select-lobby-song" style="background:#101216; color:#fff; border:1px solid #363c4a; padding:6px; font-family:inherit; border-radius:4px; font-size:13px;"></select>
         </div>
 
         <button id="btn-lobby-ghost" class="btn" style="font-size:12px; border-color:#FFAA00; color:#FFAA00; min-width:180px; padding:6px 12px;">GHOST TAPPING: ON (HOST)</button>
@@ -178,7 +178,7 @@
         <button id="btn-ready" class="btn btn-ready" style="min-width:180px;">TOGGLE READY</button>
       </div>
 
-      <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888; margin-top:5px;">BACK</button>
+      <button id="btn-multi-back" class="btn" style="border-color:#555; color:#888; margin-top:5px;">BACK</button>
     </div>
 
     <!-- 7. MATCH RESULTS -->
@@ -199,7 +199,6 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // Settings Persistence
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
 
@@ -251,7 +250,6 @@
     }
     updateMobileButtonVisibility();
 
-    // Mobile Mode Toggle
     function updateMobileModeUI() {
       btnToggleMobileMode.innerText = `MOBILE CONTROLS: ${engine.mobileControlsMode.toUpperCase()}`;
       updateMobileButtonVisibility();
@@ -266,7 +264,6 @@
       updateMobileModeUI();
     };
 
-    // Ghost Tapping Toggle
     function updateGhostButtonUI() {
       btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
       btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
@@ -280,7 +277,6 @@
       updateGhostButtonUI();
     };
 
-    // Individual Skin Slots Setup
     const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
     function updateSkinSlotStatuses() {
       SLOTS.forEach(slot => {
@@ -290,7 +286,7 @@
           statusEl.style.color = "#55e840";
         } else {
           statusEl.innerText = "DEFAULT";
-          statusEl.style.color = "#888";
+          statusEl.style.color = "#777";
         }
       });
     }
@@ -342,13 +338,37 @@
       setTimeout(() => { splashBottom.innerText = splash2[1]; }, 3600);
       setTimeout(() => {
         splashTop.innerText = "STARGAZER";
-        splashTop.style.color = "#55E840";
-        splashBottom.innerText = "VS IMPOSTOR LEGACY";
-        splashBottom.style.color = "#45f3ff";
+        splashTop.style.color = "#FDE871";
+        splashBottom.innerText = "VS IMPOSTOR V4";
+        splashBottom.style.color = "#FF3855";
         btnBootEnter.classList.remove('hidden');
       }, 4400);
     }
     playIntroSequence();
+
+    // Fast Non-Hanging GitHub Checker with Timeout
+    async function checkGitHubUpdates() {
+      const statusEl = document.getElementById('version-status');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+
+      try {
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          const run = data.workflow_runs && data.workflow_runs[0];
+          if (run && (run.status === 'in_progress' || run.status === 'queued')) {
+            statusEl.innerText = "(updating...)";
+            statusEl.style.color = "#FFAA00";
+            return;
+          }
+        }
+      } catch (_) {}
+      statusEl.innerText = "(latest)";
+      statusEl.style.color = "#55e840";
+    }
+    checkGitHubUpdates();
 
     fetch('assets/songs/songs.json')
       .then(res => res.json())
@@ -455,7 +475,7 @@
               <div class="song-card-title">${song.name}</div>
               <div class="song-card-artist">${song.artist || 'Unknown'}</div>
             </div>
-            <div style="font-size:12px; color:${song.color || '#55e840'}; font-weight:bold;">${song.difficulty || 'Normal'}</div>
+            <div style="font-size:12px; color:${song.color || '#FDE871'}; font-weight:bold;">${song.difficulty || 'Normal'}</div>
           </div>
         `;
 
@@ -498,7 +518,7 @@
     document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
     document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
 
-    // Multiplayer Flow & Preloading
+    // Multiplayer Flow
     const lobbyConnectBox = document.getElementById('lobby-connect-box');
     const lobbyRoomBox = document.getElementById('lobby-room-box');
     const lobbyRoomTitle = document.getElementById('lobby-room-title');
@@ -606,7 +626,6 @@
       }
     };
 
-    // Zero-Desync Match Start: Audio is already in RAM!
     network.onMatchStarting = async ({ startTimestamp, settings }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
@@ -615,7 +634,6 @@
         engine.ghostTapping = settings.ghostTapping;
       }
 
-      // No waiting on loadAssets! Preload already completed in lobby.
       const delayMs = startTimestamp - Date.now();
       const delaySeconds = Math.max(0.1, delayMs / 1000);
       const scheduledAudioTime = engine.audio.ctx.currentTime + delaySeconds;
@@ -641,21 +659,21 @@
 
       if (winnerId === 'tie') {
         resultsTitle.innerText = "IT'S A DRAW! 🤝";
-        resultsTitle.style.color = "#FFDD00";
+        resultsTitle.style.color = "#FFAA00";
       } else if (winnerId === network.localId) {
         resultsTitle.innerText = "VICTORY! 🏆";
         resultsTitle.style.color = "#55E840";
       } else {
         resultsTitle.innerText = "DEFEAT... 💀";
-        resultsTitle.style.color = "#FF3333";
+        resultsTitle.style.color = "#FF3855";
       }
 
       resultsBody.innerHTML = `
         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
-          <p style="color: #66fcf1; font-weight: bold;">YOU (${me ? me.role.toUpperCase() : ''}):</p>
+          <p style="color: #FDE871; font-weight: bold;">YOU (${me ? me.role.toUpperCase() : ''}):</p>
           <p>Score: ${me ? me.score : engine.score} | Accuracy: ${me ? me.accuracy : engine.accuracy}%</p>
           <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
-          <p style="color: #ff7575; font-weight: bold;">OPPONENT (${opponent ? opponent.role.toUpperCase() : ''}):</p>
+          <p style="color: #FF3855; font-weight: bold;">OPPONENT (${opponent ? opponent.role.toUpperCase() : ''}):</p>
           <p>Score: ${opponent ? opponent.score : engine.opponentScore} | Accuracy: ${opponent ? opponent.accuracy : engine.opponentAccuracy}%</p>
         </div>
       `;
@@ -677,7 +695,7 @@
           network.sendFinished(engine.score, engine.accuracy);
         } else {
           resultsTitle.innerText = "SONG COMPLETE! 🎵";
-          resultsTitle.style.color = "#66fcf1";
+          resultsTitle.style.color = "#FDE871";
           resultsBody.innerHTML = `
             <p>Final Score: <strong>${engine.score}</strong></p>
             <p>Accuracy: <strong>${engine.accuracy}%</strong></p>
