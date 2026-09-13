@@ -48,17 +48,88 @@
       <button id="btn-to-settings" class="btn" style="border-color:#888; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER -->
+    <!-- 2. CUSTOM SKIN UPLOADER (INDIVIDUAL SECTIONS) -->
     <div id="menu-skins" class="overlay hidden">
-      <h2>CUSTOM CHARACTER SKINS</h2>
-      <p style="font-size:12px; color:#aaa; max-width:320px; text-align:center;">
-        Upload PNGs named: <strong>idle.png, left.png, down.png, up.png, right.png</strong><br>
-        Optional: <strong>miss.png, taunt.png</strong>
-      </p>
-      <input type="file" id="input-skin-batch" multiple accept="image/png, image/jpeg" style="width:260px; font-size:12px;">
-      <p id="skin-status-text" style="color:#55e840; font-size:13px;">Default Skin Active</p>
-      <button id="btn-clear-skins" class="btn" style="border-color:#ff5555; color:#ff5555; font-size:12px;">RESET TO DEFAULT</button>
-      <button id="btn-skins-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+      <h2>CUSTOM SKIN SLOTS</h2>
+      
+      <div class="skin-slots-container">
+        <!-- Idle -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label">IDLE POSE:</span>
+          <div>
+            <span id="status-idle" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-idle" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Left -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label">LEFT POSE:</span>
+          <div>
+            <span id="status-left" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-left" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Down -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label">DOWN POSE:</span>
+          <div>
+            <span id="status-down" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-down" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Up -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label">UP POSE:</span>
+          <div>
+            <span id="status-up" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-up" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Right -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label">RIGHT POSE:</span>
+          <div>
+            <span id="status-right" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-right" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Miss (Optional) -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label" style="color:#ff7575;">MISS POSE:</span>
+          <div>
+            <span id="status-miss" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-miss" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Taunt (Optional) -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label" style="color:#FFDD00;">TAUNT POSE:</span>
+          <div>
+            <span id="status-taunt" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-taunt" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+
+        <!-- Bar Icon (Optional) -->
+        <div class="skin-slot-row">
+          <span class="skin-slot-label" style="color:#66fcf1;">BAR ICON:</span>
+          <div>
+            <span id="status-icon" class="skin-slot-status">DEFAULT</span>
+            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-icon" class="skin-slot-input" accept="image/png"></label>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button id="btn-clear-skins" class="btn" style="border-color:#ff5555; color:#ff5555; min-width:140px; font-size:12px; padding:6px 12px;">RESET ALL</button>
+        <button id="btn-skins-back" class="btn" style="border-color:#888; color:#888; min-width:140px; font-size:12px; padding:6px 12px;">BACK</button>
+      </div>
     </div>
 
     <!-- 3. SETTINGS MENU -->
@@ -88,7 +159,7 @@
       <button id="btn-char-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- 6. MULTIPLAYER LOBBY (WITH HOST SONG CHOOSER) -->
+    <!-- 6. MULTIPLAYER LOBBY -->
     <div id="menu-multi" class="overlay hidden">
       <h2>MULTIPLAYER LOBBY</h2>
       
@@ -102,12 +173,10 @@
         <p id="lobby-room-title" style="color:#66fcf1; font-weight:bold;"></p>
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
         
-        <!-- Host Song Chooser Dropdown -->
+        <!-- Host Song Chooser -->
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:13px; color:#45f3ff;">TRACK:</span>
-          <select id="select-lobby-song" style="background:#0b0c10; color:#fff; border:1px solid #45a29e; padding:6px; font-family:monospace; border-radius:4px; font-size:13px;">
-            <!-- Populated from songs.json -->
-          </select>
+          <select id="select-lobby-song" style="background:#0b0c10; color:#fff; border:1px solid #45a29e; padding:6px; font-family:monospace; border-radius:4px; font-size:13px;"></select>
         </div>
 
         <button id="btn-lobby-ghost" class="btn" style="font-size:12px; border-color:#FFAA00; color:#FFAA00; min-width:180px; padding:6px 12px;">GHOST TAPPING: ON (HOST)</button>
@@ -136,12 +205,11 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // Persistent Settings
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
 
-    let localSkinData = JSON.parse(localStorage.getItem('customSkin') || 'null');
-    if (localSkinData) {
+    let localSkinData = JSON.parse(localStorage.getItem('customSkin') || '{}');
+    if (Object.keys(localSkinData).length > 0) {
       engine.setSkin('local', localSkinData);
     }
 
@@ -170,12 +238,47 @@
     const btnToggleGhost = document.getElementById('btn-toggle-ghost');
     const btnLobbyGhost = document.getElementById('btn-lobby-ghost');
     const selectLobbySong = document.getElementById('select-lobby-song');
-    const skinStatusText = document.getElementById('skin-status-text');
 
-    if (localSkinData) {
-      skinStatusText.innerText = "Custom Skin Loaded & Active!";
-      skinStatusText.style.color = "#55e840";
+    // Individual Skin Slots Setup
+    const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
+
+    function updateSkinSlotStatuses() {
+      SLOTS.forEach(slot => {
+        const statusEl = document.getElementById(`status-${slot}`);
+        if (localSkinData && localSkinData[slot]) {
+          statusEl.innerText = "CUSTOM ✓";
+          statusEl.style.color = "#55e840";
+        } else {
+          statusEl.innerText = "DEFAULT";
+          statusEl.style.color = "#888";
+        }
+      });
     }
+    updateSkinSlotStatuses();
+
+    SLOTS.forEach(slot => {
+      const input = document.getElementById(`slot-${slot}`);
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          localSkinData[slot] = event.target.result;
+          localStorage.setItem('customSkin', JSON.stringify(localSkinData));
+          engine.setSkin('local', localSkinData);
+          updateSkinSlotStatuses();
+        };
+        reader.readAsDataURL(file);
+      };
+    });
+
+    document.getElementById('btn-clear-skins').onclick = () => {
+      localSkinData = {};
+      localStorage.removeItem('customSkin');
+      engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null };
+      updateSkinSlotStatuses();
+    };
 
     // 0. Intro Splash Sequence
     const INTRO_SPLASHES = [
@@ -223,7 +326,6 @@
       menuMain.classList.remove('hidden');
     };
 
-    // Fullscreen Toggle
     document.getElementById('btn-fullscreen').onclick = () => {
       const wrapper = document.getElementById('game-wrapper');
       if (!document.fullscreenElement) {
@@ -246,52 +348,6 @@
       btnToggleMirror.innerText = `MIRROR SPRITE: ${engine.mirrorSprite ? "ON" : "OFF"}`;
     };
 
-    // Custom Skin File Loader
-    document.getElementById('input-skin-batch').onchange = (e) => {
-      const files = Array.from(e.target.files);
-      if (!files.length) return;
-
-      const skinObj = localSkinData || {};
-      let loadedCount = 0;
-
-      files.forEach(file => {
-        const name = file.name.toLowerCase();
-        let slot = null;
-        if (name.includes('idle')) slot = 'idle';
-        else if (name.includes('left')) slot = 'left';
-        else if (name.includes('down')) slot = 'down';
-        else if (name.includes('up')) slot = 'up';
-        else if (name.includes('right')) slot = 'right';
-        else if (name.includes('miss')) slot = 'miss';
-        else if (name.includes('taunt')) slot = 'taunt';
-
-        if (slot) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            skinObj[slot] = event.target.result;
-            loadedCount++;
-            if (loadedCount >= 1) {
-              localSkinData = skinObj;
-              localStorage.setItem('customSkin', JSON.stringify(localSkinData));
-              engine.setSkin('local', localSkinData);
-              skinStatusText.innerText = "Custom Skin Updated & Saved!";
-              skinStatusText.style.color = "#55e840";
-            }
-          };
-          reader.readAsDataURL(file);
-        }
-      });
-    };
-
-    document.getElementById('btn-clear-skins').onclick = () => {
-      localSkinData = null;
-      localStorage.removeItem('customSkin');
-      engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null };
-      skinStatusText.innerText = "Default Skin Active";
-      skinStatusText.style.color = "#aaa";
-    };
-
-    // Settings
     function updateGhostButtonUI() {
       btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
       btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
@@ -428,7 +484,6 @@
 
       network.connect(serverUrl);
       setTimeout(() => {
-        // Send custom skin data upon joining room!
         network.joinRoom(code, 'bf', localSkinData);
         lobbyConnectBox.classList.add('hidden');
         lobbyRoomBox.classList.remove('hidden');
@@ -436,7 +491,6 @@
       }, 400);
     };
 
-    // Host Song Selector in Lobby
     selectLobbySong.onchange = () => {
       if (!isRoomHost) return;
       network.updateRoomSettings({ selectedSongId: selectLobbySong.value });
