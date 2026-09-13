@@ -1,15 +1,6 @@
 /**
- * engine.js
- * Core Canvas Rhythm Game Engine
- * Features:
- * - Full Hold / Sustain Note trails and holding mechanics
- * - Dynamic Multi-Song loader with custom bg.png
- * - Host & Freeplay Ghost Tapping toggle
- * - Grounded, auto-facing character rendering (notes render on top!)
- * - Taunt mechanic (Key T / Mobile Yellow button) & Miss poses
- * - Animated Song & Artist Pop-Up Card
- * - Psych Engine multi-touch mobile hitboxes
- * - Sample-accurate Web Audio synchronization
+ * engine.js (Custom Skin Image Engine with Fit-To-Frame Scaling & Ground Anchoring)
+ * Save in ROOT folder
  */
 
 import { AudioManager } from './audio.js';
@@ -50,21 +41,24 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Stage Background (assets/songs/<folder>/bg.png)
+    // Stage Background
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Current Song Info & Credit Pop-up Card
+    // Custom Skins Store (Images)
+    this.customSkins = {
+      local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null },
+      opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null }
+    };
+
     this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
     this.creditCardTimer = 0;
 
     this.gameMode = 'single';
     this.playerRole = 'bf';
-
-    // Ghost Tapping Setting (Default: ON)
     this.ghostTapping = true;
 
-    // Countdown State
+    // Countdown
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
@@ -74,7 +68,7 @@ export class RhythmEngine {
     this.keysHeld = [false, false, false, false];
     this.activeTouches = new Map();
 
-    // Scoring & Stats
+    // Stats
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -83,18 +77,20 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Character Animation & Pose Timers
+    // Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
+    this.bfPoseDir = -1;
+    this.limesPoseDir = -1;
+
     this.bfMissTimer = 0;
     this.limesMissTimer = 0;
     this.bfTauntTimer = 0;
     this.limesTauntTimer = 0;
 
-    // Manual Mirror Toggle
     this.mirrorSprite = false;
 
-    // Opponent Live Tracking (Multiplayer)
+    // Opponent Live Tracking
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
     this.opponentKeyTimers = [0, 0, 0, 0];
@@ -111,6 +107,21 @@ export class RhythmEngine {
 
   setRole(role) {
     this.playerRole = role;
+  }
+
+  /**
+   * Sets custom skin image from Base64 strings or URLs
+   */
+  setSkin(target, skinData) {
+    if (!skinData) return;
+    const poses = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt'];
+    poses.forEach(pose => {
+      if (skinData[pose]) {
+        const img = new Image();
+        img.src = skinData[pose];
+        this.customSkins[target][pose] = img;
+      }
+    });
   }
 
   setupInputs() {
@@ -192,11 +203,8 @@ export class RhythmEngine {
   }
 
   triggerTaunt() {
-    if (this.playerRole === 'bf') {
-      this.bfTauntTimer = 0.4;
-    } else {
-      this.limesTauntTimer = 0.4;
-    }
+    if (this.playerRole === 'bf') this.bfTauntTimer = 0.4;
+    else this.limesTauntTimer = 0.4;
 
     if (this.onTauntCallback) {
       this.onTauntCallback({ role: this.playerRole });
@@ -204,11 +212,8 @@ export class RhythmEngine {
   }
 
   handleOpponentTaunt(data) {
-    if (data.role === 'bf') {
-      this.bfTauntTimer = 0.4;
-    } else {
-      this.limesTauntTimer = 0.4;
-    }
+    if (data.role === 'bf') this.bfTauntTimer = 0.4;
+    else this.limesTauntTimer = 0.4;
   }
 
   async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
@@ -289,7 +294,6 @@ export class RhythmEngine {
     if (hitNote) {
       hitNote.hit = true;
 
-      // If it's a sustain note, mark it as actively holding
       if (hitNote.sustainLength > 0) {
         hitNote.isHolding = true;
       } else {
@@ -316,8 +320,10 @@ export class RhythmEngine {
 
       if (this.playerRole === 'bf') {
         this.bfPoseTimer = 0.3;
+        this.bfPoseDir = lane;
       } else {
         this.limesPoseTimer = 0.3;
+        this.limesPoseDir = lane;
       }
 
       if (this.onNoteHitCallback) {
@@ -330,11 +336,8 @@ export class RhythmEngine {
         this.hits.miss++;
         this.lastRating = "MISS";
 
-        if (this.playerRole === 'bf') {
-          this.bfMissTimer = 0.3;
-        } else {
-          this.limesMissTimer = 0.3;
-        }
+        if (this.playerRole === 'bf') this.bfMissTimer = 0.3;
+        else this.limesMissTimer = 0.3;
         this.updateAccuracy();
       }
     }
@@ -350,8 +353,10 @@ export class RhythmEngine {
 
     if (this.playerRole === 'bf') {
       this.limesPoseTimer = 0.3;
+      this.limesPoseDir = lane;
     } else {
       this.bfPoseTimer = 0.3;
+      this.bfPoseDir = lane;
     }
 
     const targetIsPlayer = (this.playerRole !== 'bf');
@@ -405,7 +410,6 @@ export class RhythmEngine {
       return;
     }
 
-    // Spawn window calculation
     const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -430,28 +434,23 @@ export class RhythmEngine {
       const isBotNote = (note.isPlayer !== humanIsPlayer);
       const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
-      // 1. ACTIVE SUSTAIN HOLD LOGIC
+      // Active Hold Logic
       if (note.isHolding) {
-        // Keep character singing and award continuous points
         if (!isBotNote) {
-          // Check if human is still holding the corresponding key/lane
           if (this.keysHeld[note.lane]) {
             this.score += Math.round(180 * dt);
             if (humanIsPlayer) this.bfPoseTimer = 0.2;
             else this.limesPoseTimer = 0.2;
 
-            // Note hold finished successfully!
             if (songTime >= noteEndTime) {
               note.isHolding = false;
               note.kill();
             }
           } else {
-            // Player let go of hold note early
             note.isHolding = false;
             note.kill();
           }
         } else {
-          // Bot holding
           if (songTime < noteEndTime) {
             if (humanIsPlayer) this.limesPoseTimer = 0.2;
             else this.bfPoseTimer = 0.2;
@@ -463,20 +462,20 @@ export class RhythmEngine {
         }
       }
 
-      // 2. BOT AUTO-HIT FOR UNHIT NOTES
+      // Bot Auto-Hit
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.sustainLength > 0) {
           note.isHolding = true;
         } else {
-          if (note.isPlayer) this.bfPoseTimer = 0.3;
-          else this.limesPoseTimer = 0.3;
+          if (note.isPlayer) { this.bfPoseTimer = 0.3; this.bfPoseDir = note.lane; }
+          else { this.limesPoseTimer = 0.3; this.limesPoseDir = note.lane; }
           this.opponentKeyTimers[note.lane] = 0.15;
           note.kill();
         }
       }
 
-      // 3. HUMAN MISS CHECK
+      // Human Miss
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -520,7 +519,7 @@ export class RhythmEngine {
       return;
     }
 
-    // 2. Characters (Grounded behind notes)
+    // 2. Characters (Rendered with custom pixel art or fallback boxes)
     this.renderCharacters(ctx);
 
     // 3. Mobile Touch Hitboxes
@@ -531,7 +530,7 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // 4. Receptors (Target Arrows)
+    // 4. Receptors
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
@@ -543,18 +542,16 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // 5. Rising Notes WITH SUSTAIN TRAILS (Rendered ON TOP of characters!)
+    // 5. Notes with Hold Trails
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
 
-      // Draw Hold / Sustain Trail
       if (note.sustainLength > 0) {
         const fullTrailHeight = note.sustainLength * (160 * this.speed);
         let startY = note.y + 24;
         let trailH = fullTrailHeight;
 
-        // If currently holding, trail feeds smoothly into receptor
         if (note.isHolding) {
           startY = this.receptorY + 24;
           const remainingTime = (note.strumTime + note.sustainLength) - this.audio.getCurrentSongTime();
@@ -565,11 +562,7 @@ export class RhythmEngine {
           ctx.save();
           ctx.fillStyle = ARROW_COLORS[note.lane];
           ctx.globalAlpha = 0.65;
-
-          // Main vertical trail
           ctx.fillRect(x + 18, startY, 12, trailH);
-
-          // Rounded bottom end-cap
           ctx.beginPath();
           ctx.arc(x + 24, startY + trailH, 6, 0, Math.PI * 2);
           ctx.fill();
@@ -577,13 +570,12 @@ export class RhythmEngine {
         }
       }
 
-      // Draw Arrow Head (only if not already held down)
       if (!note.isHolding) {
         this.drawArrow(ctx, x, note.y, note.lane, false, false);
       }
     });
 
-    // 6. HUD & Notifications
+    // 6. HUD
     this.renderHUD(ctx);
 
     if (this.creditCardTimer > 0) {
@@ -600,6 +592,80 @@ export class RhythmEngine {
       ctx.fillText(this.countdownText, this.width / 2, this.height / 2);
       ctx.restore();
     }
+  }
+
+  /**
+   * Helper to draw character sprite or fallback box with floor anchoring & auto-scaling
+   */
+  drawCharacter(ctx, x, groundY, skin, poseDir, poseTimer, missTimer, tauntTimer, fallbackColor, label, shouldMirror) {
+    ctx.save();
+    ctx.translate(x, groundY);
+
+    if (shouldMirror) {
+      ctx.scale(-1, 1);
+    }
+
+    // Determine current active pose image
+    let activeImg = null;
+    const dirs = ['left', 'down', 'up', 'right'];
+
+    if (tauntTimer > 0 && skin.taunt) activeImg = skin.taunt;
+    else if (missTimer > 0 && skin.miss) activeImg = skin.miss;
+    else if (poseTimer > 0 && poseDir >= 0 && skin[dirs[poseDir]]) activeImg = skin[dirs[poseDir]];
+    else if (skin.idle) activeImg = skin.idle;
+
+    if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
+      // Fit-to-Frame Scaling & Floor Anchoring
+      const maxW = 160;
+      const maxH = 200;
+      const scale = Math.min(maxW / activeImg.naturalWidth, maxH / activeImg.naturalHeight);
+      const w = activeImg.naturalWidth * scale;
+      const h = activeImg.naturalHeight * scale;
+
+      ctx.drawImage(activeImg, -w / 2, -h, w, h);
+    } else {
+      // Fallback Box
+      const boxW = 100;
+      const boxH = 140;
+      ctx.globalAlpha = 0.85;
+
+      if (tauntTimer > 0) ctx.fillStyle = '#FFDD00';
+      else if (missTimer > 0) ctx.fillStyle = '#555555';
+      else ctx.fillStyle = poseTimer > 0 ? fallbackColor.active : fallbackColor.idle;
+
+      ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(label, -boxW / 2 + 15, -60);
+    }
+
+    ctx.restore();
+  }
+
+  renderCharacters(ctx) {
+    const groundY = 510;
+    const isLimesLocal = (this.playerRole === 'limes');
+
+    const limesSkin = isLimesLocal ? this.customSkins.local : this.customSkins.opponent;
+    const bfSkin = isLimesLocal ? this.customSkins.opponent : this.customSkins.local;
+
+    // LEFT: Limes
+    this.drawCharacter(
+      ctx, 200, groundY, limesSkin,
+      this.limesPoseDir, this.limesPoseTimer, this.limesMissTimer, this.limesTauntTimer,
+      { active: '#55E840', idle: '#2A7A20' },
+      "LIMES" + (isLimesLocal ? " (YOU)" : ""),
+      this.mirrorSprite
+    );
+
+    // RIGHT: Boyfriend (Mirrored by default so BF looks Left!)
+    this.drawCharacter(
+      ctx, 580, groundY, bfSkin,
+      this.bfPoseDir, this.bfPoseTimer, this.bfMissTimer, this.bfTauntTimer,
+      { active: '#38A8FF', idle: '#175294' },
+      "BF" + (!isLimesLocal ? " (YOU)" : ""),
+      !this.mirrorSprite
+    );
   }
 
   renderSongCreditsCard(ctx) {
@@ -687,43 +753,6 @@ export class RhythmEngine {
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
-    ctx.restore();
-  }
-
-  renderCharacters(ctx) {
-    const groundY = 510;
-    const boxW = 100;
-    const boxH = 140;
-
-    // LEFT: Limes
-    ctx.save();
-    ctx.translate(200, groundY);
-    if (this.mirrorSprite) ctx.scale(-1, 1);
-
-    ctx.globalAlpha = 0.85;
-    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00';
-    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555';
-    else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
-
-    ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), -boxW / 2 + 15, -60);
-    ctx.restore();
-
-    // RIGHT: Boyfriend
-    ctx.save();
-    ctx.translate(580, groundY);
-    if (!this.mirrorSprite) ctx.scale(-1, 1);
-
-    ctx.globalAlpha = 0.85;
-    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
-    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
-    else ctx.fillStyle = this.bfPoseTimer > 0 ? '#38A8FF' : '#175294';
-
-    ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), -boxW / 2 + 25, -60);
     ctx.restore();
   }
 
