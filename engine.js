@@ -1,5 +1,5 @@
 /**
- * engine.js (Added Stage bg.png, Floor Anchoring & Mobile-Only Taunt)
+ * engine.js (Fixed Layering: Notes & Receptors Render ON TOP of Characters)
  * Save in ROOT folder
  */
 
@@ -45,7 +45,6 @@ export class RhythmEngine {
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Current Song Info & Pop-Up Card
     this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
     this.creditCardTimer = 0;
 
@@ -140,7 +139,6 @@ export class RhythmEngine {
       e.preventDefault();
       this.isTouchDevice = true;
 
-      // Reveal mobile yellow taunt button when touch is used
       const tauntBtn = document.getElementById('btn-mobile-taunt');
       if (tauntBtn) tauntBtn.style.display = 'flex';
 
@@ -205,7 +203,6 @@ export class RhythmEngine {
     const folder = songData.folder || "stargazer";
     const chartFile = songData.chart || "normal.json";
 
-    // Attempt to load song background (bg.png)
     this.hasBg = false;
     this.stageBg = new Image();
     this.stageBg.onload = () => { this.hasBg = true; };
@@ -443,11 +440,10 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // Render Stage Background (bg.png) or fallback
+    // 1. LAYER 1: Stage Background
     if (this.hasBg) {
       ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
-      // Subtle dim so notes pop
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
       ctx.fillRect(0, 0, this.width, this.height);
     } else {
       ctx.fillStyle = '#111318';
@@ -459,6 +455,10 @@ export class RhythmEngine {
       return;
     }
 
+    // 2. LAYER 2: Characters (Drawn in the background so notes scroll in front)
+    this.renderCharacters(ctx);
+
+    // 3. LAYER 3: Touch Hitboxes (Bottom background)
     if (this.isTouchDevice) {
       this.renderTouchHitboxes(ctx);
     }
@@ -466,7 +466,7 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // Draw Receptors
+    // 4. LAYER 4: Receptors (Target Arrows on top of characters)
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
@@ -478,14 +478,14 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // Draw Notes
+    // 5. LAYER 5: Rising Notes (Always drawn on the foreground)
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
       this.drawArrow(ctx, x, note.y, note.lane, false, false);
     });
 
-    this.renderCharacters(ctx);
+    // 6. LAYER 6: HUD & Floating Text
     this.renderHUD(ctx);
 
     if (this.creditCardTimer > 0) {
@@ -592,16 +592,20 @@ export class RhythmEngine {
     ctx.restore();
   }
 
+  /**
+   * Character Renderer (Grounded, Positioned Behind Notes, Semi-translucent placeholders)
+   */
   renderCharacters(ctx) {
-    const groundY = 460;
+    const groundY = 510;
     const boxW = 100;
     const boxH = 140;
 
-    // LEFT: Limes
+    // LEFT: Limes (Positioned slightly back on stage)
     ctx.save();
-    ctx.translate(170, groundY);
+    ctx.translate(200, groundY);
     if (this.mirrorSprite) ctx.scale(-1, 1);
 
+    ctx.globalAlpha = 0.85; // Lets notes pop even if they overlap
     if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00';
     else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555';
     else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
@@ -612,11 +616,12 @@ export class RhythmEngine {
     ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), -boxW / 2 + 15, -60);
     ctx.restore();
 
-    // RIGHT: Boyfriend
+    // RIGHT: Boyfriend (Positioned slightly back on stage)
     ctx.save();
-    ctx.translate(570, groundY);
+    ctx.translate(580, groundY);
     if (!this.mirrorSprite) ctx.scale(-1, 1);
 
+    ctx.globalAlpha = 0.85;
     if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
     else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
     else ctx.fillStyle = this.bfPoseTimer > 0 ? '#38A8FF' : '#175294';
