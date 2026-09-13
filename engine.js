@@ -1,5 +1,5 @@
 /**
- * engine.js (Added Psych Mobile Touch Hitboxes & Multi-touch)
+ * engine.js (Dynamic Song Loader & Animated Song Credit Card)
  * Save in ROOT folder
  */
 
@@ -41,6 +41,14 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
+    // Current Song Info & Credit Pop-up Timer
+    this.currentSong = {
+      name: "Stargazer",
+      artist: "VS Impostor Legacy",
+      color: "#55E840"
+    };
+    this.creditCardTimer = 0; // Counts down from 4.0 seconds
+
     this.gameMode = 'single';
     this.playerRole = 'bf';
 
@@ -49,10 +57,10 @@ export class RhythmEngine {
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
 
-    // Inputs & Touch Detection
+    // Touch & Inputs
     this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     this.keysHeld = [false, false, false, false];
-    this.activeTouches = new Map(); // Touch ID -> Lane index
+    this.activeTouches = new Map();
 
     // Stats
     this.score = 0;
@@ -105,15 +113,11 @@ export class RhythmEngine {
     });
   }
 
-  /**
-   * Psych Engine Style Multi-Touch Hitbox Handler
-   */
   setupTouch() {
     const getTouchLane = (touch) => {
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.width / rect.width;
       const x = (touch.clientX - rect.left) * scaleX;
-      // 4 equal columns across screen
       return Math.floor(x / (this.width / 4));
     };
 
@@ -142,8 +146,6 @@ export class RhythmEngine {
         const lane = this.activeTouches.get(touch.identifier);
         if (lane !== undefined) {
           this.activeTouches.delete(touch.identifier);
-
-          // Only unpress if no other finger is holding this same lane
           let stillHeld = false;
           for (const l of this.activeTouches.values()) {
             if (l === lane) { stillHeld = true; break; }
@@ -158,14 +160,22 @@ export class RhythmEngine {
     this.canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
   }
 
-  async loadAssets() {
-    try {
-      this.loadingStatus = "Loading audio tracks...";
-      const audioPromise = this.audio.loadSongs('assets/Inst.ogg', 'assets/Voices.ogg');
+  /**
+   * Loads assets dynamically for any song object from songs.json
+   */
+  async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
+    this.currentSong = songData;
+    this.state = 'LOADING';
+    const folder = songData.folder || "stargazer";
+    const chartFile = songData.chart || "normal.json";
 
-      this.loadingStatus = "Loading chart data...";
-      const chartPromise = fetch('assets/normal.json').then(res => {
-        if (!res.ok) throw new Error("Could not find assets/normal.json");
+    try {
+      this.loadingStatus = `Loading ${songData.name} audio...`;
+      const audioPromise = this.audio.loadSongs(`assets/songs/${folder}/Inst.ogg`, `assets/songs/${folder}/Voices.ogg`);
+
+      this.loadingStatus = `Loading ${songData.name} chart...`;
+      const chartPromise = fetch(`assets/songs/${folder}/${chartFile}`).then(res => {
+        if (!res.ok) throw new Error(`Could not find assets/songs/${folder}/${chartFile}`);
         return res.json();
       });
 
@@ -176,12 +186,22 @@ export class RhythmEngine {
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
 
+      // Reset states
+      this.pool.clear();
+      this.spawnIndex = 0;
+      this.score = 0;
+      this.combo = 0;
+      this.hits = { sick: 0, good: 0, bad: 0, shit: 0, miss: 0 };
+      this.accuracy = 100.0;
+      this.lastRating = "";
+
       this.state = 'READY';
       this.loadingStatus = "Loaded!";
     } catch (err) {
       this.state = 'ERROR';
       this.loadingStatus = `Error: ${err.message}`;
       console.error(err);
+      throw err;
     }
   }
 
@@ -192,6 +212,9 @@ export class RhythmEngine {
 
     const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
     this.audio.playAt(scheduledTime);
+
+    // Trigger 4-second animated song credits pop-up card
+    this.creditCardTimer = 4.0;
   }
 
   handleKeyPress(lane) {
@@ -281,6 +304,11 @@ export class RhythmEngine {
   }
 
   update(dt) {
+    // Credit pop-up timer
+    if (this.creditCardTimer > 0) {
+      this.creditCardTimer -= dt;
+    }
+
     if (this.state === 'COUNTDOWN') {
       this.countdownTimer -= dt;
       if (this.countdownTimer > 1.8) {
@@ -373,7 +401,6 @@ export class RhythmEngine {
       return;
     }
 
-    // Draw Psych Mobile Hitboxes at bottom if touch is enabled
     if (this.isTouchDevice) {
       this.renderTouchHitboxes(ctx);
     }
@@ -393,7 +420,7 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // Draw Active Notes
+    // Draw Notes
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
@@ -402,6 +429,11 @@ export class RhythmEngine {
 
     this.renderCharacters(ctx);
     this.renderHUD(ctx);
+
+    // Draw Animated Song & Author Pop-Up Card
+    if (this.creditCardTimer > 0) {
+      this.renderSongCreditsCard(ctx);
+    }
 
     // Countdown Overlay
     if (this.state === 'COUNTDOWN') {
@@ -417,8 +449,46 @@ export class RhythmEngine {
   }
 
   /**
-   * Psych Mobile Hitboxes (4 colored columns across the bottom screen)
+   * Psych Engine Style Animated Song & Author Pop-Up Card
    */
+  renderSongCreditsCard(ctx) {
+    ctx.save();
+
+    // Slide in from left during first 0.5s, fade out during last 0.8s
+    const progress = 4.0 - this.creditCardTimer;
+    let slideX = Math.min(1, progress * 2.5); // 0.0 -> 1.0
+    const alpha = this.creditCardTimer < 0.8 ? (this.creditCardTimer / 0.8) : 1.0;
+
+    const cardWidth = 260;
+    const cardHeight = 62;
+    const targetX = 20;
+    const currentX = (targetX - (1 - slideX) * 200);
+    const currentY = 20;
+
+    ctx.globalAlpha = alpha;
+
+    // Translucent background
+    ctx.fillStyle = 'rgba(10, 12, 16, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(currentX, currentY, cardWidth, cardHeight, 6) : ctx.rect(currentX, currentY, cardWidth, cardHeight);
+    ctx.fill();
+
+    // Colored accent left border
+    ctx.fillStyle = this.currentSong.color || '#55E840';
+    ctx.fillRect(currentX, currentY, 5, cardHeight);
+
+    // Text details
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(`🎵 ${this.currentSong.name}`, currentX + 16, currentY + 26);
+
+    ctx.fillStyle = '#AAAAAA';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`by ${this.currentSong.artist || 'Unknown'}`, currentX + 16, currentY + 48);
+
+    ctx.restore();
+  }
+
   renderTouchHitboxes(ctx) {
     const boxWidth = this.width / 4;
     const boxHeight = 160;
@@ -433,7 +503,6 @@ export class RhythmEngine {
       ctx.globalAlpha = isPressed ? 0.35 : 0.08;
       ctx.fillRect(x, boxY, boxWidth, boxHeight);
 
-      // Top dividing highlight bar
       ctx.globalAlpha = isPressed ? 0.8 : 0.25;
       ctx.strokeStyle = ARROW_COLORS[i];
       ctx.lineWidth = 2;
@@ -517,7 +586,7 @@ export class RhythmEngine {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '18px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText("--- STARGAZER ---", this.width / 2, this.height / 2 - 40);
+    ctx.fillText(`--- ${this.currentSong ? this.currentSong.name.toUpperCase() : "RHYTHM ENGINE"} ---`, this.width / 2, this.height / 2 - 40);
     ctx.font = '14px monospace';
     ctx.fillText(this.loadingStatus, this.width / 2, this.height / 2);
     ctx.textAlign = 'left';
