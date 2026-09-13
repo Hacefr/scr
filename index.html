@@ -406,3 +406,184 @@
         engine.gameMode = 'single';
         engine.setRole(role);
         await engine.startWithCountdown(2.4);
+      } catch (err) {
+        songLoadError.innerText = `Assets not found in assets/songs/${selectedSong.folder}/!`;
+        songLoadError.classList.remove('hidden');
+      }
+    }
+
+    document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
+    document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
+
+    // Multiplayer Flow
+    const lobbyConnectBox = document.getElementById('lobby-connect-box');
+    const lobbyRoomBox = document.getElementById('lobby-room-box');
+    const lobbyRoomTitle = document.getElementById('lobby-room-title');
+    const lobbyStatusText = document.getElementById('lobby-status-text');
+
+    document.getElementById('btn-join-room').onclick = () => {
+      const serverUrl = document.getElementById('input-server-url').value.trim();
+      const code = document.getElementById('input-room-code').value.trim();
+      if (!code) return alert("Please enter a room code!");
+
+      network.connect(serverUrl);
+      setTimeout(() => {
+        // Send custom skin data upon joining room!
+        network.joinRoom(code, 'bf', localSkinData);
+        lobbyConnectBox.classList.add('hidden');
+        lobbyRoomBox.classList.remove('hidden');
+        lobbyRoomTitle.innerText = `ROOM: ${code.toUpperCase()}`;
+      }, 400);
+    };
+
+    // Host Song Selector in Lobby
+    selectLobbySong.onchange = () => {
+      if (!isRoomHost) return;
+      network.updateRoomSettings({ selectedSongId: selectLobbySong.value });
+    };
+
+    btnLobbyGhost.onclick = () => {
+      if (!isRoomHost) return;
+      const current = engine.ghostTapping;
+      network.updateRoomSettings({ ghostTapping: !current });
+    };
+
+    network.onRoomSettingsUpdate = (settings) => {
+      if (settings.ghostTapping !== undefined) {
+        engine.ghostTapping = settings.ghostTapping;
+        btnLobbyGhost.innerText = `GHOST TAPPING: ${settings.ghostTapping ? "ON" : "OFF"} ${isRoomHost ? "(HOST)" : "(LOCKED)"}`;
+        btnLobbyGhost.style.color = settings.ghostTapping ? "#55e840" : "#ff5555";
+      }
+      if (settings.selectedSongId) {
+        selectLobbySong.value = settings.selectedSongId;
+      }
+    };
+
+    network.onOpponentSkin = (skinData) => {
+      engine.setSkin('opponent', skinData);
+    };
+
+    document.getElementById('btn-switch-role').onclick = () => network.switchRole();
+    document.getElementById('btn-ready').onclick = () => network.toggleReady();
+
+    engine.onNoteHitCallback = (data) => {
+      if (engine.gameMode === 'multiplayer') network.sendNoteHit(data);
+    };
+
+    engine.onTauntCallback = (data) => {
+      if (engine.gameMode === 'multiplayer' && network.socket) {
+        network.socket.emit('player_note_hit', { type: 'taunt', role: data.role });
+      }
+    };
+
+    network.onRoomUpdate = ({ players, settings, hostId }) => {
+      isRoomHost = (network.localId === hostId);
+      const me = players.find(p => p.id === network.localId);
+      if (me) {
+        engine.setRole(me.role);
+        lobbyStatusText.innerText = `You are: ${me.role.toUpperCase()} | Ready: ${me.ready ? "YES" : "NO"}\nPlayers in Room: ${players.length}/2`;
+      }
+      selectLobbySong.disabled = !isRoomHost;
+
+      if (settings) {
+        engine.ghostTapping = settings.ghostTapping;
+        btnLobbyGhost.innerText = `GHOST TAPPING: ${settings.ghostTapping ? "ON" : "OFF"} ${isRoomHost ? "(HOST)" : "(LOCKED)"}`;
+        btnLobbyGhost.style.color = settings.ghostTapping ? "#55e840" : "#ff5555";
+        btnLobbyGhost.style.cursor = isRoomHost ? "pointer" : "default";
+
+        if (settings.selectedSongId) {
+          selectLobbySong.value = settings.selectedSongId;
+        }
+      }
+    };
+
+    network.onMatchStarting = async ({ startTimestamp, settings }) => {
+      menuMulti.classList.add('hidden');
+      engine.gameMode = 'multiplayer';
+
+      if (settings) {
+        engine.ghostTapping = settings.ghostTapping;
+        const targetSong = songCatalog.find(s => s.id === settings.selectedSongId) || songCatalog[0];
+        await engine.loadAssets(targetSong);
+      } else {
+        await engine.loadAssets(songCatalog[0]);
+      }
+
+      const delayMs = startTimestamp - Date.now();
+      const delaySeconds = Math.max(0.1, delayMs / 1000);
+      const scheduledAudioTime = engine.audio.ctx.currentTime + delaySeconds;
+
+      await engine.startWithCountdown(delaySeconds, scheduledAudioTime);
+    };
+
+    network.onOpponentHit = (data) => {
+      if (data.type === 'taunt') engine.handleOpponentTaunt(data);
+      else engine.handleOpponentNoteHit(data);
+    };
+
+    network.onOpponentDisconnected = () => disconnectBanner.classList.remove('hidden');
+    network.onOpponentReconnected = () => disconnectBanner.classList.add('hidden');
+    network.onOpponentForfeit = ({ message }) => {
+      disconnectBanner.classList.add('hidden');
+      alert(message);
+    };
+
+    network.onMatchResults = ({ winnerId, players }) => {
+      const me = players.find(p => p.id === network.localId);
+      const opponent = players.find(p => p.id !== network.localId);
+
+      if (winnerId === 'tie') {
+        resultsTitle.innerText = "IT'S A DRAW! 🤝";
+        resultsTitle.style.color = "#FFDD00";
+      } else if (winnerId === network.localId) {
+        resultsTitle.innerText = "VICTORY! 🏆";
+        resultsTitle.style.color = "#55E840";
+      } else {
+        resultsTitle.innerText = "DEFEAT... 💀";
+        resultsTitle.style.color = "#FF3333";
+      }
+
+      resultsBody.innerHTML = `
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+          <p style="color: #66fcf1; font-weight: bold;">YOU (${me ? me.role.toUpperCase() : ''}):</p>
+          <p>Score: ${me ? me.score : engine.score} | Accuracy: ${me ? me.accuracy : engine.accuracy}%</p>
+          <hr style="border: 0; border-top: 1px solid #333; margin: 10px 0;">
+          <p style="color: #ff7575; font-weight: bold;">OPPONENT (${opponent ? opponent.role.toUpperCase() : ''}):</p>
+          <p>Score: ${opponent ? opponent.score : engine.opponentScore} | Accuracy: ${opponent ? opponent.accuracy : engine.opponentAccuracy}%</p>
+        </div>
+      `;
+      menuResults.classList.remove('hidden');
+    };
+
+    let lastTime = performance.now();
+    function gameLoop(currentTime) {
+      const dt = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      engine.update(dt);
+      engine.render();
+
+      if (engine.state === 'FINISHED' && !menuResults.classList.contains('active')) {
+        menuResults.classList.add('active');
+
+        if (engine.gameMode === 'multiplayer') {
+          network.sendFinished(engine.score, engine.accuracy);
+        } else {
+          resultsTitle.innerText = "SONG COMPLETE! 🎵";
+          resultsTitle.style.color = "#66fcf1";
+          resultsBody.innerHTML = `
+            <p>Final Score: <strong>${engine.score}</strong></p>
+            <p>Accuracy: <strong>${engine.accuracy}%</strong></p>
+            <p>Max Combo: <strong>${engine.highestCombo}</strong></p>
+          `;
+          menuResults.classList.remove('hidden');
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
