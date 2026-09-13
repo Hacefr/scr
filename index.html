@@ -21,7 +21,7 @@
   <div id="game-wrapper">
     <button id="btn-fullscreen">⛶ FULLSCREEN</button>
 
-    <!-- Mobile Yellow Taunt Button -->
+    <!-- Mobile-Only Yellow Taunt Button -->
     <div id="btn-mobile-taunt" title="Taunt (T)">TAUNT</div>
 
     <div id="version-tag">
@@ -32,11 +32,13 @@
 
     <div id="disconnect-banner" class="hidden">Opponent Disconnected! Waiting (30s)...</div>
 
-    <!-- 0. STARTUP BOOT SCREEN (BEFORE MAIN MENU) -->
+    <!-- 0. FNF INTRO SPLASH TEXT BOOT SCREEN -->
     <div id="screen-boot" class="overlay">
-      <h1>STARGAZER</h1>
-      <p id="boot-status" style="color: #45f3ff; font-size: 14px;">INITIALIZING ENGINE...</p>
-      <button id="btn-boot-enter" class="btn hidden" style="border-color: #55e840; color: #55e840; font-size: 16px;">CLICK OR TAP TO ENTER</button>
+      <div class="splash-container">
+        <div id="splash-top" class="splash-line"></div>
+        <div id="splash-bottom" class="splash-line" style="color: #66fcf1;"></div>
+      </div>
+      <button id="btn-boot-enter" class="btn hidden" style="margin-top: 25px; border-color: #55e840; color: #55e840; font-size: 16px;">CLICK OR TAP TO ENTER</button>
     </div>
 
     <!-- 1. MAIN MENU -->
@@ -107,7 +109,8 @@
 
     // UI Elements
     const screenBoot = document.getElementById('screen-boot');
-    const bootStatus = document.getElementById('boot-status');
+    const splashTop = document.getElementById('splash-top');
+    const splashBottom = document.getElementById('splash-bottom');
     const btnBootEnter = document.getElementById('btn-boot-enter');
 
     const menuMain = document.getElementById('menu-main');
@@ -120,26 +123,54 @@
     const disconnectBanner = document.getElementById('disconnect-banner');
     const songLoadError = document.getElementById('song-load-error');
 
-    // 0. Boot Loader Sequence
-    async function bootGame() {
-      try {
-        bootStatus.innerText = "Loading song registry...";
-        const res = await fetch('assets/songs/songs.json');
-        songCatalog = await res.json();
-        selectedSong = songCatalog[0];
-        populateSongList();
+    // 0. Classic FNF Bouncing Intro Splash Text Sequence
+    const INTRO_SPLASHES = [
+      ["SHOUTOUTS TO TOM FULP", "LMAO"],
+      ["VS IMPOSTOR V4", "IN YOUR BROWSER"],
+      ["CHROMIUM COMPATIBLE", "60 FPS GUARANTEED"],
+      ["HIS NAME IS NOT KEITH", "DUMB EGGS"],
+      ["LIMES SUPREMACY", "POLUS MOMENT"],
+      ["SAMPLE ACCURATE AUDIO", "ZERO DRIFT BABY"]
+    ];
 
-        bootStatus.innerText = "Ready!";
+    // Pick two random splashes for the boot intro
+    const splash1 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
+    let splash2 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
+    while (splash2 === splash1) splash2 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
+
+    function playIntroSequence() {
+      // Beat 1 (0.8s): First phrase top
+      setTimeout(() => { splashTop.innerText = splash1[0]; }, 800);
+      // Beat 2 (1.6s): First phrase bottom
+      setTimeout(() => { splashBottom.innerText = splash1[1]; }, 1600);
+      // Beat 3 (2.4s): Clear
+      setTimeout(() => { splashTop.innerText = ""; splashBottom.innerText = ""; }, 2400);
+      // Beat 4 (2.8s): Second phrase top
+      setTimeout(() => { splashTop.innerText = splash2[0]; }, 2800);
+      // Beat 5 (3.6s): Second phrase bottom
+      setTimeout(() => { splashBottom.innerText = splash2[1]; }, 3600);
+      // Beat 6 (4.4s): Reveal Logo & Enter button
+      setTimeout(() => {
+        splashTop.innerText = "STARGAZER";
+        splashTop.style.color = "#55E840";
+        splashBottom.innerText = "VS IMPOSTOR LEGACY";
+        splashBottom.style.color = "#45f3ff";
         btnBootEnter.classList.remove('hidden');
-      } catch (err) {
-        bootStatus.innerText = "Notice: Add assets/songs/songs.json";
-        btnBootEnter.classList.remove('hidden');
-      }
+      }, 4400);
     }
-    bootGame();
+    playIntroSequence();
+
+    // Load song catalog
+    fetch('assets/songs/songs.json')
+      .then(res => res.json())
+      .then(data => {
+        songCatalog = data;
+        selectedSong = data[0];
+        populateSongList();
+      })
+      .catch(err => console.error("Could not load songs.json:", err));
 
     btnBootEnter.onclick = async () => {
-      // User gesture unlocks Web Audio API
       await engine.audio.initContext();
       screenBoot.classList.add('hidden');
       menuMain.classList.remove('hidden');
@@ -192,6 +223,7 @@
     }
     checkGitHubUpdates();
 
+    // Populate Freeplay with Custom Song Banners / Vignettes (banner.png)
     function populateSongList() {
       const listEl = document.getElementById('song-list');
       listEl.innerHTML = '';
@@ -201,12 +233,23 @@
         card.className = 'song-card';
         card.style.borderLeftColor = song.color || '#55e840';
 
+        // Check if banner image exists in song folder
+        const bannerUrl = `assets/songs/${song.folder}/banner.png`;
+        const testImg = new Image();
+        testImg.onload = () => {
+          card.style.backgroundImage = `url('${bannerUrl}')`;
+        };
+        testImg.src = bannerUrl;
+
         card.innerHTML = `
-          <div>
-            <div class="song-card-title">${song.name}</div>
-            <div class="song-card-artist">${song.artist || 'Unknown'}</div>
+          <div class="song-card-overlay"></div>
+          <div class="song-card-content">
+            <div>
+              <div class="song-card-title">${song.name}</div>
+              <div class="song-card-artist">${song.artist || 'Unknown'}</div>
+            </div>
+            <div style="font-size:12px; color:${song.color || '#55e840'}; font-weight:bold;">${song.difficulty || 'Normal'}</div>
           </div>
-          <div style="font-size:12px; color:${song.color || '#55e840'}; font-weight:bold;">${song.difficulty || 'Normal'}</div>
         `;
 
         card.onclick = () => {
@@ -293,7 +336,6 @@
       if (engine.gameMode === 'multiplayer') network.sendNoteHit(data);
     };
 
-    // Taunt Network Hook
     engine.onTauntCallback = (data) => {
       if (engine.gameMode === 'multiplayer' && network.socket) {
         network.socket.emit('player_note_hit', { type: 'taunt', role: data.role });
