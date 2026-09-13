@@ -1,0 +1,14 @@
+{
+  "name": "stargazer-multiplayer-relay",
+  "version": "1.0.0",
+  "description": "Lightweight Socket.io 1v1 synchronized relay for Stargazer rhythm game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
