@@ -19,38 +19,52 @@
 <body>
 
   <div id="game-wrapper">
-    <!-- Fullscreen Button -->
     <button id="btn-fullscreen">⛶ FULLSCREEN</button>
 
-    <!-- Psych Engine Style Version & Live GitHub Status Tag -->
+    <!-- Mobile Yellow Taunt Button -->
+    <div id="btn-mobile-taunt" title="Taunt (T)">TAUNT</div>
+
     <div id="version-tag">
       v1.3.2 <span id="version-status" style="color:#666;">(checking...)</span>
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-    <!-- Disconnect Banner -->
     <div id="disconnect-banner" class="hidden">Opponent Disconnected! Waiting (30s)...</div>
 
-    <!-- MAIN MENU OVERLAY -->
-    <div id="menu-main" class="overlay">
+    <!-- 0. STARTUP BOOT SCREEN (BEFORE MAIN MENU) -->
+    <div id="screen-boot" class="overlay">
+      <h1>STARGAZER</h1>
+      <p id="boot-status" style="color: #45f3ff; font-size: 14px;">INITIALIZING ENGINE...</p>
+      <button id="btn-boot-enter" class="btn hidden" style="border-color: #55e840; color: #55e840; font-size: 16px;">CLICK OR TAP TO ENTER</button>
+    </div>
+
+    <!-- 1. MAIN MENU -->
+    <div id="menu-main" class="overlay hidden">
       <h1>STARGAZER</h1>
       <p style="color: #888;">Low-End Optimized 1v1 Rhythm Engine</p>
-      <!-- Renamed to FREEPLAY -->
-      <button id="btn-to-freeplay" class="btn">FREEPLAY (VS BOT)</button>
+      <button id="btn-to-freeplay" class="btn">FREEPLAY (TRACKS)</button>
       <button id="btn-to-multi" class="btn">MULTIPLAYER (1v1)</button>
     </div>
 
-    <!-- FREEPLAY ROLE SELECT -->
-    <div id="menu-freeplay" class="overlay hidden">
-      <h2>FREEPLAY CHARACTER SELECT</h2>
-      <p id="freeplay-loading-status" style="color: #66fcf1; font-size: 13px;">Checking audio...</p>
-      <button id="btn-freeplay-bf" class="btn">BOYFRIEND (RIGHT)</button>
-      <button id="btn-freeplay-limes" class="btn">LIMES (LEFT)</button>
-      <button id="btn-freeplay-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+    <!-- 2. FREEPLAY TRACK SELECTOR -->
+    <div id="menu-song-select" class="overlay hidden">
+      <h2>SELECT TRACK</h2>
+      <div id="song-list" class="song-list-container"></div>
+      <button id="btn-song-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- MULTIPLAYER LOBBY -->
+    <!-- 3. CHARACTER SELECT -->
+    <div id="menu-character-select" class="overlay hidden">
+      <h2 id="char-select-song-title">CHARACTER SELECT</h2>
+      <p id="song-load-error" style="color: #ff5555; font-size: 13px;" class="hidden"></p>
+      <button id="btn-freeplay-bf" class="btn">BOYFRIEND (RIGHT)</button>
+      <button id="btn-freeplay-limes" class="btn">LIMES (LEFT)</button>
+      <button id="btn-toggle-mirror" class="btn" style="border-color:#FFAA00; color:#FFAA00; font-size:12px;">MIRROR SPRITE: OFF</button>
+      <button id="btn-char-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+    </div>
+
+    <!-- 4. MULTIPLAYER LOBBY -->
     <div id="menu-multi" class="overlay hidden">
       <h2>MULTIPLAYER LOBBY</h2>
       
@@ -70,7 +84,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
-    <!-- MATCH RESULTS OVERLAY -->
+    <!-- 5. MATCH RESULTS -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -82,60 +96,57 @@
     import { RhythmEngine } from './engine.js';
     import { NetworkManager } from './network.js';
 
-    const CURRENT_VERSION = "v1.3.2";
     const GITHUB_REPO = "Hacefr/scr";
 
     const canvas = document.getElementById('gameCanvas');
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    const assetLoadPromise = engine.loadAssets();
+    let songCatalog = [];
+    let selectedSong = null;
 
-    // 1. Live GitHub Workflow & Version Checker
-    async function checkGitHubUpdates() {
-      const statusEl = document.getElementById('version-status');
+    // UI Elements
+    const screenBoot = document.getElementById('screen-boot');
+    const bootStatus = document.getElementById('boot-status');
+    const btnBootEnter = document.getElementById('btn-boot-enter');
+
+    const menuMain = document.getElementById('menu-main');
+    const menuSongSelect = document.getElementById('menu-song-select');
+    const menuCharSelect = document.getElementById('menu-character-select');
+    const menuMulti = document.getElementById('menu-multi');
+    const menuResults = document.getElementById('menu-results');
+    const resultsTitle = document.getElementById('results-title');
+    const resultsBody = document.getElementById('results-body');
+    const disconnectBanner = document.getElementById('disconnect-banner');
+    const songLoadError = document.getElementById('song-load-error');
+
+    // 0. Boot Loader Sequence
+    async function bootGame() {
       try {
-        // Check active workflow runs (deploying actions)
-        const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`);
-        if (runsRes.ok) {
-          const runsData = await runsRes.json();
-          const latestRun = runsData.workflow_runs && runsData.workflow_runs[0];
+        bootStatus.innerText = "Loading song registry...";
+        const res = await fetch('assets/songs/songs.json');
+        songCatalog = await res.json();
+        selectedSong = songCatalog[0];
+        populateSongList();
 
-          if (latestRun && (latestRun.status === 'in_progress' || latestRun.status === 'queued')) {
-            statusEl.innerText = "(partial update deploying...)";
-            statusEl.style.color = "#FFAA00"; // Orange
-            return;
-          }
-        }
-
-        // Check latest commit vs build
-        const commitRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/main`);
-        if (commitRes.ok) {
-          const commitData = await commitRes.json();
-          const commitDate = new Date(commitData.commit.committer.date);
-          const pageLoadedDate = new Date();
-
-          // If GitHub commit is newer than when the script was authored/loaded
-          const diffMinutes = (pageLoadedDate - commitDate) / (1000 * 60);
-
-          if (diffMinutes < 30) {
-            statusEl.innerText = "(latest)";
-            statusEl.style.color = "#55e840"; // Green
-          } else {
-            statusEl.innerText = "(latest)";
-            statusEl.style.color = "#66fcf1";
-          }
-        }
+        bootStatus.innerText = "Ready!";
+        btnBootEnter.classList.remove('hidden');
       } catch (err) {
-        // Fallback gracefully if offline or rate-limited
-        statusEl.innerText = "";
+        bootStatus.innerText = "Notice: Add assets/songs/songs.json";
+        btnBootEnter.classList.remove('hidden');
       }
     }
-    checkGitHubUpdates();
+    bootGame();
 
-    // 2. Fullscreen Toggle
-    const btnFullscreen = document.getElementById('btn-fullscreen');
-    btnFullscreen.onclick = () => {
+    btnBootEnter.onclick = async () => {
+      // User gesture unlocks Web Audio API
+      await engine.audio.initContext();
+      screenBoot.classList.add('hidden');
+      menuMain.classList.remove('hidden');
+    };
+
+    // Fullscreen Toggle
+    document.getElementById('btn-fullscreen').onclick = () => {
       const wrapper = document.getElementById('game-wrapper');
       if (!document.fullscreenElement) {
         if (wrapper.requestFullscreen) wrapper.requestFullscreen();
@@ -146,33 +157,82 @@
       }
     };
 
-    const menuMain = document.getElementById('menu-main');
-    const menuFreeplay = document.getElementById('menu-freeplay');
-    const menuMulti = document.getElementById('menu-multi');
-    const menuResults = document.getElementById('menu-results');
-    const resultsTitle = document.getElementById('results-title');
-    const resultsBody = document.getElementById('results-body');
-    const disconnectBanner = document.getElementById('disconnect-banner');
-    const freeplayLoadingStatus = document.getElementById('freeplay-loading-status');
+    // Mobile Yellow Taunt Button
+    document.getElementById('btn-mobile-taunt').onclick = (e) => {
+      e.stopPropagation();
+      engine.triggerTaunt();
+    };
 
-    const lobbyConnectBox = document.getElementById('lobby-connect-box');
-    const lobbyRoomBox = document.getElementById('lobby-room-box');
-    const lobbyRoomTitle = document.getElementById('lobby-room-title');
-    const lobbyStatusText = document.getElementById('lobby-status-text');
+    // Mirror Sprite Toggle Button
+    const btnToggleMirror = document.getElementById('btn-toggle-mirror');
+    btnToggleMirror.onclick = () => {
+      engine.mirrorSprite = !engine.mirrorSprite;
+      btnToggleMirror.innerText = `MIRROR SPRITE: ${engine.mirrorSprite ? "ON" : "OFF"}`;
+    };
 
-    assetLoadPromise.then(() => {
-      freeplayLoadingStatus.innerText = "Audio loaded and ready!";
-      freeplayLoadingStatus.style.color = "#55e840";
-    });
+    // Live GitHub Workflow Checker
+    async function checkGitHubUpdates() {
+      const statusEl = document.getElementById('version-status');
+      try {
+        const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`);
+        if (runsRes.ok) {
+          const runsData = await runsRes.json();
+          const latestRun = runsData.workflow_runs && runsData.workflow_runs[0];
+          if (latestRun && (latestRun.status === 'in_progress' || latestRun.status === 'queued')) {
+            statusEl.innerText = "(partial update deploying...)";
+            statusEl.style.color = "#FFAA00";
+            return;
+          }
+        }
+        statusEl.innerText = "(latest)";
+        statusEl.style.color = "#55e840";
+      } catch (err) {
+        statusEl.innerText = "";
+      }
+    }
+    checkGitHubUpdates();
 
-    // 3. Navigation
+    function populateSongList() {
+      const listEl = document.getElementById('song-list');
+      listEl.innerHTML = '';
+
+      songCatalog.forEach(song => {
+        const card = document.createElement('div');
+        card.className = 'song-card';
+        card.style.borderLeftColor = song.color || '#55e840';
+
+        card.innerHTML = `
+          <div>
+            <div class="song-card-title">${song.name}</div>
+            <div class="song-card-artist">${song.artist || 'Unknown'}</div>
+          </div>
+          <div style="font-size:12px; color:${song.color || '#55e840'}; font-weight:bold;">${song.difficulty || 'Normal'}</div>
+        `;
+
+        card.onclick = () => {
+          selectedSong = song;
+          document.getElementById('char-select-song-title').innerText = song.name.toUpperCase();
+          songLoadError.classList.add('hidden');
+          menuSongSelect.classList.add('hidden');
+          menuCharSelect.classList.remove('hidden');
+        };
+
+        listEl.appendChild(card);
+      });
+    }
+
+    // Navigation
     document.getElementById('btn-to-freeplay').onclick = () => {
       menuMain.classList.add('hidden');
-      menuFreeplay.classList.remove('hidden');
+      menuSongSelect.classList.remove('hidden');
     };
-    document.getElementById('btn-freeplay-back').onclick = () => {
-      menuFreeplay.classList.add('hidden');
+    document.getElementById('btn-song-back').onclick = () => {
+      menuSongSelect.classList.add('hidden');
       menuMain.classList.remove('hidden');
+    };
+    document.getElementById('btn-char-back').onclick = () => {
+      menuCharSelect.classList.add('hidden');
+      menuSongSelect.classList.remove('hidden');
     };
     document.getElementById('btn-to-multi').onclick = () => {
       menuMain.classList.add('hidden');
@@ -188,28 +248,36 @@
       engine.state = 'READY';
     };
 
-    // 4. Freeplay Start
+    // Freeplay Playback
     async function startFreeplay(role) {
-      freeplayLoadingStatus.innerText = "Buffering audio tracks, please wait...";
-      await assetLoadPromise;
-
-      menuFreeplay.classList.add('hidden');
-      engine.gameMode = 'single';
-      engine.setRole(role);
-      await engine.startWithCountdown(2.4);
+      songLoadError.classList.add('hidden');
+      try {
+        await engine.loadAssets(selectedSong);
+        menuCharSelect.classList.add('hidden');
+        engine.gameMode = 'single';
+        engine.setRole(role);
+        await engine.startWithCountdown(2.4);
+      } catch (err) {
+        songLoadError.innerText = `Assets not found in assets/songs/${selectedSong.folder}/!`;
+        songLoadError.classList.remove('hidden');
+      }
     }
 
     document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
     document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
 
-    // 5. Multiplayer Lobby
+    // Multiplayer Flow
+    const lobbyConnectBox = document.getElementById('lobby-connect-box');
+    const lobbyRoomBox = document.getElementById('lobby-room-box');
+    const lobbyRoomTitle = document.getElementById('lobby-room-title');
+    const lobbyStatusText = document.getElementById('lobby-status-text');
+
     document.getElementById('btn-join-room').onclick = () => {
       const serverUrl = document.getElementById('input-server-url').value.trim();
       const code = document.getElementById('input-room-code').value.trim();
       if (!code) return alert("Please enter a room code!");
 
       network.connect(serverUrl);
-
       setTimeout(() => {
         network.joinRoom(code, 'bf');
         lobbyConnectBox.classList.add('hidden');
@@ -222,12 +290,17 @@
     document.getElementById('btn-ready').onclick = () => network.toggleReady();
 
     engine.onNoteHitCallback = (data) => {
-      if (engine.gameMode === 'multiplayer') {
-        network.sendNoteHit(data);
+      if (engine.gameMode === 'multiplayer') network.sendNoteHit(data);
+    };
+
+    // Taunt Network Hook
+    engine.onTauntCallback = (data) => {
+      if (engine.gameMode === 'multiplayer' && network.socket) {
+        network.socket.emit('player_note_hit', { type: 'taunt', role: data.role });
       }
     };
 
-    network.onRoomUpdate = ({ players, status }) => {
+    network.onRoomUpdate = ({ players }) => {
       const me = players.find(p => p.id === network.localId);
       if (me) {
         engine.setRole(me.role);
@@ -239,7 +312,7 @@
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
 
-      await assetLoadPromise;
+      await engine.loadAssets(selectedSong || songCatalog[0]);
 
       const delayMs = startTimestamp - Date.now();
       const delaySeconds = Math.max(0.1, delayMs / 1000);
@@ -249,15 +322,15 @@
     };
 
     network.onOpponentHit = (data) => {
-      engine.handleOpponentNoteHit(data);
+      if (data.type === 'taunt') {
+        engine.handleOpponentTaunt(data);
+      } else {
+        engine.handleOpponentNoteHit(data);
+      }
     };
 
-    network.onOpponentDisconnected = () => {
-      disconnectBanner.classList.remove('hidden');
-    };
-    network.onOpponentReconnected = () => {
-      disconnectBanner.classList.add('hidden');
-    };
+    network.onOpponentDisconnected = () => disconnectBanner.classList.remove('hidden');
+    network.onOpponentReconnected = () => disconnectBanner.classList.add('hidden');
     network.onOpponentForfeit = ({ message }) => {
       disconnectBanner.classList.add('hidden');
       alert(message);
