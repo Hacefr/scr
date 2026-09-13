@@ -1,6 +1,14 @@
 /**
- * engine.js (Fixed Layering: Notes & Receptors Render ON TOP of Characters)
- * Save in ROOT folder
+ * engine.js
+ * Core Canvas Rhythm Game Engine
+ * Features:
+ * - Dynamic Multi-Song loader with custom bg.png
+ * - Host & Freeplay Ghost Tapping toggle
+ * - Grounded, auto-facing character rendering (notes render on top!)
+ * - Taunt mechanic (Key T / Mobile Yellow button) & Miss poses
+ * - Animated Song & Artist Pop-Up Card
+ * - Psych Engine multi-touch mobile hitboxes
+ * - Sample-accurate Web Audio synchronization
  */
 
 import { AudioManager } from './audio.js';
@@ -41,15 +49,19 @@ export class RhythmEngine {
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Background Stage Image
+    // Stage Background (assets/songs/<folder>/bg.png)
     this.stageBg = new Image();
     this.hasBg = false;
 
+    // Current Song Info & Credit Pop-up Card
     this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
     this.creditCardTimer = 0;
 
     this.gameMode = 'single';
     this.playerRole = 'bf';
+
+    // Ghost Tapping Setting (Default: ON)
+    this.ghostTapping = true;
 
     // Countdown State
     this.countdownTimer = 0;
@@ -61,7 +73,7 @@ export class RhythmEngine {
     this.keysHeld = [false, false, false, false];
     this.activeTouches = new Map();
 
-    // Stats
+    // Scoring & Stats
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -70,7 +82,7 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Pose & Animation Timers
+    // Character Animation & Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
     this.bfMissTimer = 0;
@@ -78,9 +90,10 @@ export class RhythmEngine {
     this.bfTauntTimer = 0;
     this.limesTauntTimer = 0;
 
+    // Manual Mirror Toggle
     this.mirrorSprite = false;
 
-    // Opponent Live Tracking
+    // Opponent Live Tracking (Multiplayer)
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
     this.opponentKeyTimers = [0, 0, 0, 0];
@@ -103,6 +116,7 @@ export class RhythmEngine {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
 
+      // Keybind T: Taunt
       if (e.code === 'KeyT') {
         if (this.state === 'PLAYING' || this.state === 'COUNTDOWN') {
           this.triggerTaunt();
@@ -197,12 +211,16 @@ export class RhythmEngine {
     }
   }
 
+  /**
+   * Loads assets dynamically for any song from songs.json
+   */
   async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
     this.currentSong = songData;
     this.state = 'LOADING';
     const folder = songData.folder || "stargazer";
     const chartFile = songData.chart || "normal.json";
 
+    // Attempt to load stage background (assets/songs/<folder>/bg.png)
     this.hasBg = false;
     this.stageBg = new Image();
     this.stageBg.onload = () => { this.hasBg = true; };
@@ -226,6 +244,7 @@ export class RhythmEngine {
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
 
+      // Reset gameplay state
       this.pool.clear();
       this.spawnIndex = 0;
       this.score = 0;
@@ -252,6 +271,7 @@ export class RhythmEngine {
     const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
     this.audio.playAt(scheduledTime);
 
+    // Pop-up song credit card for 4 seconds
     this.creditCardTimer = 4.0;
   }
 
@@ -304,15 +324,19 @@ export class RhythmEngine {
         this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
       }
     } else {
-      this.score = Math.max(0, this.score - 50);
-      this.combo = 0;
-      this.hits.miss++;
-      this.lastRating = "MISS";
+      // ONLY MISS IF GHOST TAPPING IS DISABLED!
+      if (!this.ghostTapping) {
+        this.score = Math.max(0, this.score - 50);
+        this.combo = 0;
+        this.hits.miss++;
+        this.lastRating = "MISS";
 
-      if (this.playerRole === 'bf') {
-        this.bfMissTimer = 0.3;
-      } else {
-        this.limesMissTimer = 0.3;
+        if (this.playerRole === 'bf') {
+          this.bfMissTimer = 0.3;
+        } else {
+          this.limesMissTimer = 0.3;
+        }
+        this.updateAccuracy();
       }
     }
 
@@ -440,7 +464,7 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // 1. LAYER 1: Stage Background
+    // 1. LAYER 1: Background
     if (this.hasBg) {
       ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -455,10 +479,10 @@ export class RhythmEngine {
       return;
     }
 
-    // 2. LAYER 2: Characters (Drawn in the background so notes scroll in front)
+    // 2. LAYER 2: Characters (Grounded behind the notes)
     this.renderCharacters(ctx);
 
-    // 3. LAYER 3: Touch Hitboxes (Bottom background)
+    // 3. LAYER 3: Touch Hitboxes
     if (this.isTouchDevice) {
       this.renderTouchHitboxes(ctx);
     }
@@ -466,7 +490,7 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // 4. LAYER 4: Receptors (Target Arrows on top of characters)
+    // 4. LAYER 4: Receptors (Target Arrows)
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
@@ -478,14 +502,14 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // 5. LAYER 5: Rising Notes (Always drawn on the foreground)
+    // 5. LAYER 5: Rising Notes (Always drawn on top of characters!)
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
       this.drawArrow(ctx, x, note.y, note.lane, false, false);
     });
 
-    // 6. LAYER 6: HUD & Floating Text
+    // 6. LAYER 6: HUD & Notifications
     this.renderHUD(ctx);
 
     if (this.creditCardTimer > 0) {
@@ -592,22 +616,19 @@ export class RhythmEngine {
     ctx.restore();
   }
 
-  /**
-   * Character Renderer (Grounded, Positioned Behind Notes, Semi-translucent placeholders)
-   */
   renderCharacters(ctx) {
     const groundY = 510;
     const boxW = 100;
     const boxH = 140;
 
-    // LEFT: Limes (Positioned slightly back on stage)
+    // LEFT: Limes
     ctx.save();
     ctx.translate(200, groundY);
     if (this.mirrorSprite) ctx.scale(-1, 1);
 
-    ctx.globalAlpha = 0.85; // Lets notes pop even if they overlap
-    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00';
-    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555';
+    ctx.globalAlpha = 0.85;
+    if (this.limesTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow Taunt
+    else if (this.limesMissTimer > 0) ctx.fillStyle = '#555555'; // Dark Miss
     else ctx.fillStyle = this.limesPoseTimer > 0 ? '#55E840' : '#2A7A20';
 
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
@@ -616,14 +637,14 @@ export class RhythmEngine {
     ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), -boxW / 2 + 15, -60);
     ctx.restore();
 
-    // RIGHT: Boyfriend (Positioned slightly back on stage)
+    // RIGHT: Boyfriend
     ctx.save();
     ctx.translate(580, groundY);
-    if (!this.mirrorSprite) ctx.scale(-1, 1);
+    if (!this.mirrorSprite) ctx.scale(-1, 1); // Mirrored by default so BF faces Left!
 
     ctx.globalAlpha = 0.85;
-    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00';
-    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555';
+    if (this.bfTauntTimer > 0) ctx.fillStyle = '#FFDD00'; // Yellow Taunt
+    else if (this.bfMissTimer > 0) ctx.fillStyle = '#555555'; // Dark Miss
     else ctx.fillStyle = this.bfPoseTimer > 0 ? '#38A8FF' : '#175294';
 
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
