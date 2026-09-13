@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Stargazer 1v1</title>
+  <title>Temu FNF</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -48,11 +48,10 @@
       <button id="btn-to-settings" class="btn" style="border-color:#555; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER (WITH 3 LOADOUT SLOTS) -->
+    <!-- 2. CUSTOM SKIN UPLOADER -->
     <div id="menu-skins" class="overlay hidden">
       <h2>CUSTOM SKIN SLOTS</h2>
       
-      <!-- 3 Skin Slot Buttons -->
       <div style="display:flex; gap:8px; margin-bottom:4px;">
         <button id="btn-slot-1" class="btn slot-btn active">SLOT 1</button>
         <button id="btn-slot-2" class="btn slot-btn">SLOT 2</button>
@@ -187,7 +186,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#555; color:#888; margin-top:5px;">BACK</button>
     </div>
 
-    <!-- 7. MATCH RESULTS -->
+    <!-- 7. MATCH RESULTS (NEVER BLANK) -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -205,9 +204,8 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // 1. SKIN SLOTS CONSTANTS & FUNCTIONS (DECLARED FIRST TO AVOID TDZ ERROR)
+    // 1. SKIN SLOTS CONSTANTS & FUNCTIONS
     const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
-
     let currentSlot = parseInt(localStorage.getItem('equippedSkinSlot') || '1');
     
     function getSlotData(slotNum) {
@@ -235,7 +233,6 @@
       });
     }
 
-    // Settings
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
 
@@ -305,7 +302,7 @@
     slotButtons[0].onclick = () => selectSlot(1);
     slotButtons[1].onclick = () => selectSlot(2);
     slotButtons[2].onclick = () => selectSlot(3);
-    selectSlot(currentSlot); // Safely initialize slot
+    selectSlot(currentSlot);
 
     function updateMobileButtonVisibility() {
       if (engine.shouldShowMobileUI()) {
@@ -371,12 +368,12 @@
 
     // 0. Intro Splash Sequence
     const INTRO_SPLASHES = [
-      ["SHOUTOUTS TO TOM FULP", "LMAO"],
-      ["VS IMPOSTOR V4", "IN YOUR BROWSER"],
+      ["SHOUTOUTS TO Mike", ";-;"],
+      ["VS IMPOSTOR V4", "FROM TEMU"],
       ["CHROMIUM COMPATIBLE", "60 FPS GUARANTEED"],
       ["HIS NAME IS NOT KEITH", "DUMB EGGS"],
-      ["LIMES SUPREMACY", "POLUS MOMENT"],
-      ["SAMPLE ACCURATE AUDIO", "ZERO DRIFT BABY"]
+      ["LIMES SUPREMACY", "NOT THAT ONE..."],
+      ["Hello its me", "ITS VERITY"]
     ];
 
     const splash1 = INTRO_SPLASHES[Math.floor(Math.random() * INTRO_SPLASHES.length)];
@@ -399,7 +396,6 @@
     }
     playIntroSequence();
 
-    // Fast Non-Hanging GitHub Checker
     async function checkGitHubUpdates() {
       const statusEl = document.getElementById('version-status');
       const controller = new AbortController();
@@ -561,7 +557,9 @@
         menuCharSelect.classList.add('hidden');
         engine.gameMode = 'single';
         engine.setRole(role);
-        await engine.startWithCountdown(2.4);
+        
+        const targetAudioTime = engine.audio.ctx.currentTime + 2.4;
+        await engine.startWithCountdown(targetAudioTime, 2.4);
       } catch (err) {
         songLoadError.innerText = `Assets not found in assets/songs/${selectedSong.folder}/!`;
         songLoadError.classList.remove('hidden');
@@ -679,23 +677,39 @@
       }
     };
 
+    // Two-Phase Handshake Check
+    network.onHandshakeCheck = () => {
+      lobbyPreloadStatus.innerText = "LINKING WITH OPPONENT & SERVER...";
+      lobbyPreloadStatus.style.color = "#FFAA00";
+      network.syncClockWithServer();
+
+      if (isLobbyPreloaded) {
+        network.sendHandshakeAck();
+      } else {
+        const interval = setInterval(() => {
+          if (isLobbyPreloaded) {
+            clearInterval(interval);
+            network.sendHandshakeAck();
+          }
+        }, 50);
+      }
+    };
+
+    // Synchronized Start
     network.onMatchStarting = async ({ startTimestamp, settings }) => {
       menuMulti.classList.add('hidden');
       engine.gameMode = 'multiplayer';
 
       if (settings) {
         engine.ghostTapping = settings.ghostTapping;
-        const targetSong = songCatalog.find(s => s.id === settings.selectedSongId) || songCatalog[0];
-        await engine.loadAssets(targetSong);
-      } else {
-        await engine.loadAssets(songCatalog[0]);
       }
 
-      const delayMs = startTimestamp - Date.now();
+      const syncedServerNow = network.getSyncedServerTime();
+      const delayMs = startTimestamp - syncedServerNow;
       const delaySeconds = Math.max(0.1, delayMs / 1000);
       const scheduledAudioTime = engine.audio.ctx.currentTime + delaySeconds;
 
-      await engine.startWithCountdown(delaySeconds, scheduledAudioTime);
+      await engine.startWithCountdown(scheduledAudioTime, delaySeconds);
     };
 
     network.onOpponentHit = (data) => {
@@ -705,16 +719,17 @@
 
     network.onOpponentDisconnected = () => disconnectBanner.classList.remove('hidden');
     network.onOpponentReconnected = () => disconnectBanner.classList.add('hidden');
-    network.onOpponentForfeit = ({ message }) => {
-      disconnectBanner.classList.add('hidden');
-      alert(message);
-    };
 
-    network.onMatchResults = ({ winnerId, players }) => {
+    // Winner Screen Handling
+    network.onMatchResults = ({ winnerId, players, forfeit }) => {
+      disconnectBanner.classList.add('hidden');
       const me = players.find(p => p.id === network.localId);
       const opponent = players.find(p => p.id !== network.localId);
 
-      if (winnerId === 'tie') {
+      if (forfeit) {
+        resultsTitle.innerText = "VICTORY BY FORFEIT! 🏆";
+        resultsTitle.style.color = "#55E840";
+      } else if (winnerId === 'tie') {
         resultsTitle.innerText = "IT'S A DRAW! 🤝";
         resultsTitle.style.color = "#FFAA00";
       } else if (winnerId === network.localId) {
@@ -745,11 +760,20 @@
       engine.update(dt);
       engine.render();
 
+      // Immediately show results on completion (Never a blank screen!)
       if (engine.state === 'FINISHED' && !menuResults.classList.contains('active')) {
         menuResults.classList.add('active');
 
         if (engine.gameMode === 'multiplayer') {
           network.sendFinished(engine.score, engine.accuracy);
+          
+          resultsTitle.innerText = "SONG COMPLETED! ⏳";
+          resultsTitle.style.color = "#FFAA00";
+          resultsBody.innerHTML = `
+            <p>Waiting for opponent to finish...</p>
+            <p style="color: #FDE871; margin-top:10px;">Your Score: <strong>${engine.score}</strong> (${engine.accuracy}%)</p>
+          `;
+          menuResults.classList.remove('hidden');
         } else {
           resultsTitle.innerText = "SONG COMPLETE! 🎵";
           resultsTitle.style.color = "#FDE871";
