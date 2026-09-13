@@ -1,5 +1,5 @@
 /**
- * network.js (Client-Side Multiplayer Relay Adapter)
+ * network.js (Added Room Settings Relay)
  * Save in ROOT folder
  */
 
@@ -10,8 +10,8 @@ export class NetworkManager {
     this.roomCode = null;
     this.localId = null;
 
-    // Callbacks for UI/Engine hooks
     this.onRoomUpdate = null;
+    this.onRoomSettingsUpdate = null;
     this.onMatchStarting = null;
     this.onOpponentHit = null;
     this.onOpponentDisconnected = null;
@@ -21,14 +21,9 @@ export class NetworkManager {
     this.onError = null;
   }
 
-  /**
-   * Connects to the Socket.io relay server.
-   * @param {string} serverUrl - e.g. "http://localhost:3000" or your Render URL
-   */
   connect(serverUrl) {
     if (this.socket) this.socket.disconnect();
 
-    // io is loaded globally from the Socket.io CDN script in index.html
     this.socket = window.io(serverUrl, {
       transports: ['websocket', 'polling']
     });
@@ -36,7 +31,6 @@ export class NetworkManager {
     this.socket.on('connect', () => {
       this.connected = true;
       this.localId = this.socket.id;
-      console.log("Connected to relay server with ID:", this.localId);
     });
 
     this.socket.on('error_message', (msg) => {
@@ -45,6 +39,10 @@ export class NetworkManager {
 
     this.socket.on('room_update', (data) => {
       if (this.onRoomUpdate) this.onRoomUpdate(data);
+    });
+
+    this.socket.on('room_settings_update', (settings) => {
+      if (this.onRoomSettingsUpdate) this.onRoomSettingsUpdate(settings);
     });
 
     this.socket.on('match_starting', (data) => {
@@ -70,17 +68,17 @@ export class NetworkManager {
     this.socket.on('match_results', (data) => {
       if (this.onMatchResults) this.onMatchResults(data);
     });
-
-    this.socket.on('disconnect', () => {
-      this.connected = false;
-      console.warn("Disconnected from server");
-    });
   }
 
   joinRoom(roomCode, preferredRole = 'bf') {
     if (!this.socket) return;
     this.roomCode = roomCode.toUpperCase();
     this.socket.emit('join_room', { roomCode: this.roomCode, preferredRole });
+  }
+
+  updateRoomSettings(settings) {
+    if (!this.socket) return;
+    this.socket.emit('update_room_settings', settings);
   }
 
   switchRole() {
