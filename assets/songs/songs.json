@@ -2,10 +2,51 @@
   {
     "id": "stargazer",
     "name": "Stargazer",
+    "artist": "VS Impostor Legacy",
     "folder": "stargazer",
     "chart": "normal.json",
     "color": "#55E840",
     "bpm": 150,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "o2",
+    "name": "O2",
+    "artist": "Punkett",
+    "folder": "o2",
+    "chart": "normal.json",
+    "color": "#E6194B",
+    "bpm": 165,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "sauces-moongus",
+    "name": "Sauces Moongus",
+    "artist": "Saster",
+    "folder": "sauces-moongus",
+    "chart": "normal.json",
+    "color": "#FF5722",
+    "bpm": 150,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "heartbeat",
+    "name": "Heartbeat",
+    "artist": "Saster",
+    "folder": "heartbeat",
+    "chart": "normal.json",
+    "color": "#E0218A",
+    "bpm": 140,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "sussus-toogus",
+    "name": "Sussus Toogus",
+    "artist": "Ethan & Fabs",
+    "folder": "sussus-toogus",
+    "chart": "normal.json",
+    "color": "#00CC66",
+    "bpm": 145,
     "difficulty": "Hard"
   }
 ]
