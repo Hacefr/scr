@@ -25,7 +25,6 @@ body {
   border-radius: 8px;
   overflow: hidden;
   background-color: #0e1015;
-  /* Automatically searches for assets/menu.png */
   background-image: url('assets/menu.png');
   background-size: cover;
   background-position: center;
@@ -42,7 +41,7 @@ canvas {
   object-fit: contain;
 }
 
-/* Sleek Fullscreen Toggle */
+/* Fullscreen Toggle */
 #btn-fullscreen {
   position: absolute;
   top: 12px;
@@ -67,7 +66,7 @@ canvas {
   transform: scale(1.04);
 }
 
-/* Mobile-Only Yellow Taunt Button */
+/* Mobile Taunt Button */
 #btn-mobile-taunt {
   display: none;
   position: absolute;
@@ -94,7 +93,7 @@ canvas {
   background: #FFAA00;
 }
 
-/* FNF Style Version Tag */
+/* Version Tag */
 #version-tag {
   position: absolute;
   bottom: 8px;
@@ -109,14 +108,14 @@ canvas {
   border-radius: 3px;
 }
 
-/* UI Overlays (Translucent so assets/menu.png shines through) */
+/* Overlays */
 .overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(10, 12, 16, 0.78);
+  background: rgba(10, 12, 16, 0.82);
   backdrop-filter: blur(2px);
   display: flex;
   flex-direction: column;
@@ -144,7 +143,7 @@ h2 {
   text-shadow: 2px 2px 0px #000;
 }
 
-/* Classic FNF Bouncing Intro Text */
+/* FNF Intro Splash Text */
 .splash-container {
   display: flex;
   flex-direction: column;
@@ -168,7 +167,7 @@ h2 {
   100% { transform: scale(1.0); }
 }
 
-/* Authentic FNF Menu Buttons */
+/* Buttons */
 .btn {
   background: #181b22;
   color: #ffffff;
@@ -203,12 +202,29 @@ h2 {
   color: #000;
 }
 
+/* 3 Skin Slot Selector Buttons */
+.slot-btn {
+  min-width: 95px !important;
+  padding: 7px 14px !important;
+  font-size: 12px !important;
+  border-color: #363c4a !important;
+  color: #aaa !important;
+  background: #101216 !important;
+}
+
+.slot-btn.active {
+  background: #FDE871 !important;
+  color: #000000 !important;
+  border-color: #FDE871 !important;
+  transform: scale(1.05);
+}
+
 /* Individual Skin Slots */
 .skin-slots-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 310px;
+  max-height: 290px;
   overflow-y: auto;
   width: 380px;
   padding: 4px 6px;
@@ -258,7 +274,7 @@ h2 {
   color: #000;
 }
 
-/* Freeplay Song Cards */
+/* Song List */
 .song-list-container {
   display: flex;
   flex-direction: column;
