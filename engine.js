@@ -1,5 +1,5 @@
 /**
- * engine.js (Added "3, 2, 1, GO!" Countdown & Opponent Sync)
+ * engine.js (Added Psych Mobile Touch Hitboxes & Multi-touch)
  * Save in ROOT folder
  */
 
@@ -44,13 +44,17 @@ export class RhythmEngine {
     this.gameMode = 'single';
     this.playerRole = 'bf';
 
-    // Countdown State (seconds remaining)
+    // Countdown State
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
 
-    // Local Keys & Stats
+    // Inputs & Touch Detection
+    this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     this.keysHeld = [false, false, false, false];
+    this.activeTouches = new Map(); // Touch ID -> Lane index
+
+    // Stats
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -74,6 +78,7 @@ export class RhythmEngine {
     this.loadingStatus = "Initializing...";
 
     this.setupInputs();
+    this.setupTouch();
   }
 
   setRole(role) {
@@ -98,6 +103,59 @@ export class RhythmEngine {
         this.keysHeld[lane] = false;
       }
     });
+  }
+
+  /**
+   * Psych Engine Style Multi-Touch Hitbox Handler
+   */
+  setupTouch() {
+    const getTouchLane = (touch) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.width / rect.width;
+      const x = (touch.clientX - rect.left) * scaleX;
+      // 4 equal columns across screen
+      return Math.floor(x / (this.width / 4));
+    };
+
+    const handleTouchStart = (e) => {
+      e.preventDefault();
+      this.isTouchDevice = true;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        const lane = getTouchLane(touch);
+
+        if (lane >= 0 && lane <= 3) {
+          this.activeTouches.set(touch.identifier, lane);
+          this.keysHeld[lane] = true;
+          if (this.state === 'PLAYING') {
+            this.handleKeyPress(lane);
+          }
+        }
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        const lane = this.activeTouches.get(touch.identifier);
+        if (lane !== undefined) {
+          this.activeTouches.delete(touch.identifier);
+
+          // Only unpress if no other finger is holding this same lane
+          let stillHeld = false;
+          for (const l of this.activeTouches.values()) {
+            if (l === lane) { stillHeld = true; break; }
+          }
+          this.keysHeld[lane] = stillHeld;
+        }
+      }
+    };
+
+    this.canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    this.canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    this.canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
   }
 
   async loadAssets() {
@@ -127,17 +185,12 @@ export class RhythmEngine {
     }
   }
 
-  /**
-   * Starts playback with an animated 3-2-1-GO countdown
-   */
   async startWithCountdown(delaySeconds = 2.4, targetAudioTime = null) {
     await this.audio.initContext();
     this.state = 'COUNTDOWN';
     this.countdownTimer = delaySeconds;
 
     const scheduledTime = targetAudioTime || (this.audio.ctx.currentTime + delaySeconds);
-
-    // Schedule audio playback ahead of time for sample-accurate sync
     this.audio.playAt(scheduledTime);
   }
 
@@ -228,22 +281,20 @@ export class RhythmEngine {
   }
 
   update(dt) {
-    // 1. Update Countdown
     if (this.state === 'COUNTDOWN') {
       this.countdownTimer -= dt;
-
       if (this.countdownTimer > 1.8) {
         this.countdownText = "3";
-        this.countdownColor = "#F9393F"; // Red
+        this.countdownColor = "#F9393F";
       } else if (this.countdownTimer > 1.2) {
         this.countdownText = "2";
-        this.countdownColor = "#FFAA00"; // Orange
+        this.countdownColor = "#FFAA00";
       } else if (this.countdownTimer > 0.6) {
         this.countdownText = "1";
-        this.countdownColor = "#FFDD00"; // Yellow
+        this.countdownColor = "#FFDD00";
       } else if (this.countdownTimer > 0.0) {
         this.countdownText = "GO!";
-        this.countdownColor = "#12FA05"; // Green
+        this.countdownColor = "#12FA05";
       } else {
         this.state = 'PLAYING';
       }
@@ -322,6 +373,11 @@ export class RhythmEngine {
       return;
     }
 
+    // Draw Psych Mobile Hitboxes at bottom if touch is enabled
+    if (this.isTouchDevice) {
+      this.renderTouchHitboxes(ctx);
+    }
+
     const oppBaseX = 80;
     const playerBaseX = 460;
 
@@ -347,7 +403,7 @@ export class RhythmEngine {
     this.renderCharacters(ctx);
     this.renderHUD(ctx);
 
-    // Render Countdown Overlay
+    // Countdown Overlay
     if (this.state === 'COUNTDOWN') {
       ctx.save();
       ctx.font = 'bold 82px sans-serif';
@@ -356,6 +412,32 @@ export class RhythmEngine {
       ctx.shadowColor = '#000000';
       ctx.shadowBlur = 12;
       ctx.fillText(this.countdownText, this.width / 2, this.height / 2);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Psych Mobile Hitboxes (4 colored columns across the bottom screen)
+   */
+  renderTouchHitboxes(ctx) {
+    const boxWidth = this.width / 4;
+    const boxHeight = 160;
+    const boxY = this.height - boxHeight;
+
+    for (let i = 0; i < 4; i++) {
+      const isPressed = this.keysHeld[i];
+      const x = i * boxWidth;
+
+      ctx.save();
+      ctx.fillStyle = ARROW_COLORS[i];
+      ctx.globalAlpha = isPressed ? 0.35 : 0.08;
+      ctx.fillRect(x, boxY, boxWidth, boxHeight);
+
+      // Top dividing highlight bar
+      ctx.globalAlpha = isPressed ? 0.8 : 0.25;
+      ctx.strokeStyle = ARROW_COLORS[i];
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, boxY, boxWidth, boxHeight);
       ctx.restore();
     }
   }
@@ -398,16 +480,16 @@ export class RhythmEngine {
   renderCharacters(ctx) {
     const limesPose = this.limesPoseTimer > 0;
     ctx.fillStyle = limesPose ? '#55E840' : '#2A7A20';
-    ctx.fillRect(120, 360, 100, 140);
+    ctx.fillRect(120, 320, 100, 140);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), 135, 435);
+    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), 135, 395);
 
     const bfPose = this.bfPoseTimer > 0;
     ctx.fillStyle = bfPose ? '#38A8FF' : '#175294';
-    ctx.fillRect(520, 360, 100, 140);
+    ctx.fillRect(520, 320, 100, 140);
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), 550, 435);
+    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), 550, 395);
   }
 
   renderHUD(ctx) {
@@ -418,10 +500,10 @@ export class RhythmEngine {
       const youLead = this.score >= this.opponentScore;
       ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
       const hudText = `YOU: ${this.score} (${this.accuracy}%)  VS  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
-      ctx.fillText(hudText, 110, this.height - 30);
+      ctx.fillText(hudText, 110, this.height - 180);
     } else {
       const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
-      ctx.fillText(statsText, 140, this.height - 30);
+      ctx.fillText(statsText, 140, this.height - 180);
     }
 
     if (this.lastRating) {
