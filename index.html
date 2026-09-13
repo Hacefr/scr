@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stargazer - 1v1 Playtest</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- Fixed internal 800x600 resolution for sharp rendering on all screens -->
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <div id="instructions">
+    Controls: <strong>D F J K</strong> or <strong>Arrow Keys</strong> | Click screen to Start
+  </div>
+
+  <script type="module">
+    import { RhythmEngine } from './engine.js';
+
+    const canvas = document.getElementById('gameCanvas');
+    const engine = new RhythmEngine(canvas);
+
+    // Click or Space to start playback once assets load
+    function handleStart() {
+      if (engine.state === 'READY') {
+        engine.start();
+      }
+    }
+
+    window.addEventListener('click', handleStart);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        handleStart();
+      }
+    });
+
+    // High-Performance 60 FPS RequestAnimationFrame Loop
+    let lastTime = performance.now();
+
+    function gameLoop(currentTime) {
+      const dt = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      // Update engine timing and note pool
+      engine.update(dt);
+
+      // Draw active frame to canvas
+      engine.render();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start loading assets on boot
+    engine.loadAssets().then(() => {
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
+</body>
+</html>
