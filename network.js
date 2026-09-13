@@ -1,5 +1,5 @@
 /**
- * network.js (Added Room Settings Relay)
+ * network.js (Added Custom Skin Sync & Host Song Controls)
  * Save in ROOT folder
  */
 
@@ -12,6 +12,7 @@ export class NetworkManager {
 
     this.onRoomUpdate = null;
     this.onRoomSettingsUpdate = null;
+    this.onOpponentSkin = null;
     this.onMatchStarting = null;
     this.onOpponentHit = null;
     this.onOpponentDisconnected = null;
@@ -45,6 +46,10 @@ export class NetworkManager {
       if (this.onRoomSettingsUpdate) this.onRoomSettingsUpdate(settings);
     });
 
+    this.socket.on('opponent_skin', (skinData) => {
+      if (this.onOpponentSkin) this.onOpponentSkin(skinData);
+    });
+
     this.socket.on('match_starting', (data) => {
       if (this.onMatchStarting) this.onMatchStarting(data);
     });
@@ -70,15 +75,20 @@ export class NetworkManager {
     });
   }
 
-  joinRoom(roomCode, preferredRole = 'bf') {
+  joinRoom(roomCode, preferredRole = 'bf', customSkin = null) {
     if (!this.socket) return;
     this.roomCode = roomCode.toUpperCase();
-    this.socket.emit('join_room', { roomCode: this.roomCode, preferredRole });
+    this.socket.emit('join_room', { roomCode: this.roomCode, preferredRole, customSkin });
   }
 
   updateRoomSettings(settings) {
     if (!this.socket) return;
     this.socket.emit('update_room_settings', settings);
+  }
+
+  sendSkin(skinData) {
+    if (!this.socket) return;
+    this.socket.emit('player_skin', skinData);
   }
 
   switchRole() {
