@@ -1,5 +1,6 @@
 /**
- * engine.js (Updated for Singleplayer + Multiplayer Roles)
+ * engine.js (Tuned Scroll Speed & Smooth Reaction Window)
+ * Save in ROOT folder
  */
 
 import { AudioManager } from './audio.js';
@@ -43,7 +44,6 @@ export class RhythmEngine {
     // Game Mode & Role: 'bf' (Player 1) or 'limes' (Player 2)
     this.gameMode = 'single'; // 'single' | 'multiplayer'
     this.playerRole = 'bf';   // 'bf' controls right side, 'limes' controls left side
-    this.isBotplayOpponent = true;
 
     // Keys & Stats
     this.keysHeld = [false, false, false, false];
@@ -137,7 +137,6 @@ export class RhythmEngine {
     let hitNote = null;
     let minDiff = Infinity;
 
-    // Human hits notes for their selected character
     // 'bf' hits isPlayer === true | 'limes' hits isPlayer === false
     const targetIsPlayer = (this.playerRole === 'bf');
 
@@ -179,7 +178,6 @@ export class RhythmEngine {
         this.limesPoseTimer = 0.3;
       }
 
-      // Broadcast hit to opponent if in multiplayer
       if (this.onNoteHitCallback) {
         this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
       }
@@ -210,7 +208,8 @@ export class RhythmEngine {
       return;
     }
 
-    const spawnWindow = 1.5 / this.speed;
+    // Spawn window: Gives notes enough runway from bottom of screen
+    const spawnWindow = 2.5 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
       if (data.time - songTime <= spawnWindow) {
@@ -227,18 +226,19 @@ export class RhythmEngine {
     const humanIsPlayer = (this.playerRole === 'bf');
 
     this.pool.forEachActive(note => {
-      const distance = (note.strumTime - songTime) * (450 * this.speed);
+      // Tuned scroll multiplier: 240 pixels/sec creates standard comfortable FNF speed
+      const distance = (note.strumTime - songTime) * (240 * this.speed);
       note.y = this.receptorY + distance;
 
       const isBotNote = (note.isPlayer !== humanIsPlayer);
 
-      // In Singleplayer, Bot auto-hits the opponent character
+      // In Singleplayer, Bot auto-hits the other character
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.isPlayer) {
-          this.bfPoseTimer = 0.3; // Bot is playing BF
+          this.bfPoseTimer = 0.3;
         } else {
-          this.limesPoseTimer = 0.3; // Bot is playing Limes
+          this.limesPoseTimer = 0.3;
         }
         note.kill();
       }
