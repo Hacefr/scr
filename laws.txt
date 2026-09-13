@@ -1,0 +1,148 @@
+================================================================================
+                    STARGAZER RHYTHM ENGINE - DEVELOPER BIBLE
+================================================================================
+Version: 1.3.2
+Target Platforms: PC, Chromebooks, Mobile & Touchscreen Browsers (60 FPS Cap)
+Architecture: Pure HTML5 Canvas 2D + Web Audio API + Node.js/Socket.io Relay
+
+
+================================================================================
+1. DIRECTORY BLUEPRINT
+================================================================================
+my-rhythm-game/
+├── assets/
+│   ├── menu.png                    <-- Main Menu & Lobby Background
+│   └── songs/
+│       ├── songs.json              <-- Master song registry list
+│       ├── stargazer/
+│       │   ├── normal.json         <-- nmv2 / Codename chart format
+│       │   ├── Inst.ogg            <-- Instrumental track
+│       │   ├── Voices.ogg          <-- Vocals track
+│       │   ├── bg.png              <-- (Optional) In-game stage background
+│       │   └── banner.png          <-- (Optional) Freeplay card thumbnail
+│       └── [other-song-folders]/
+├── audio.js                        <-- Dual-track sample-accurate audio engine
+├── engine.js                       <-- 60 FPS Canvas loop, camera bop, HUD
+├── parser.js                       <-- FNF JSON chart parser
+├── pool.js                         <-- Zero-allocation object pool for notes
+├── network.js                      <-- Client Socket.io networking
+├── index.html                      <-- Menus, custom skins uploader, lobby
+├── style.css                       <-- FNF arcade styling & touch hitboxes
+├── laws.txt                        <-- This Developer Bible
+└── server/
+    ├── package.json
+    └── server.js                   <-- Node.js relay on Render (port 10000)
+
+
+================================================================================
+2. IMAGE RESOLUTIONS & PISKEL SPECIFICATIONS
+================================================================================
+
+A. MAIN MENU BACKGROUND (menu.png)
+   - Location: assets/menu.png
+   - Display Size: 800 x 600 px (4:3 Aspect Ratio)
+   - In Piskel:
+     * Option 1 (Chunky Retro): Draw at 200 x 150 px -> Export 4x (800 x 600 px)
+     * Option 2 (Crisp Detail): Draw at 400 x 300 px -> Export 2x (800 x 600 px)
+   - Format: PNG (Opaque)
+   - Behavior: Automatically appears behind the Boot Screen, Main Menu, 
+     Settings, Custom Skins, and Freeplay menus with a subtle dark tint.
+
+B. STAGE BACKGROUND (bg.png)
+   - Location: assets/songs/[song-folder]/bg.png
+   - Canvas Display Size: 800 x 600 px (4:3 Aspect Ratio)
+   - In Piskel: Draw at 200 x 150 px -> Export at 4x scale (800 x 600 px)
+   - Format: PNG (Opaque)
+   - Fallback: If missing, engine defaults to dark stage color (#111318).
+
+C. FREEPLAY SONG BANNER / VIGNETTE (banner.png)
+   - Location: assets/songs/[song-folder]/banner.png
+   - Display Size: 360 x 70 px (~5:1 wide horizontal strip)
+   - In Piskel: Draw at 90 x 20 px or 180 x 35 px -> Export at 4x or 2x
+   - Format: PNG
+   - Fallback: If missing, engine defaults to the song's colored border.
+
+D. CHARACTER SPRITES (Pixel Art in Piskel)
+   - Native Piskel Canvas: 64 x 64 px (or 64 x 80 px if character is tall)
+   - Export Scale: 2x or 3x (Output: ~128x128 px or 150x180 px)
+   - Format: PNG with transparent background
+   - Bounding Box in Engine: 160 x 200 px (Auto-shrinks & preserves aspect ratio)
+   - ANCHOR RULE: The character's feet MUST touch the bottom of the canvas on 
+     every frame so they do not slide or float when singing!
+   - Poses Supported:
+     * idle     -> Neutral bouncing pose
+     * left     -> Singing Left
+     * down     -> Singing Down (crouch)
+     * up       -> Singing Up (reach)
+     * right    -> Singing Right
+     * miss     -> (Optional) Stunned/sad pose on wrong key
+     * taunt    -> (Optional) Flex pose triggered by 'T' key or mobile yellow button
+     * icon     -> (Optional) 32x32 px headshot for the Tug-Of-War Health Bar
+
+
+================================================================================
+3. VISUAL SYSTEMS & CAMERA DYNAMICS
+================================================================================
+A. Camera Beat Bop ("The Bop"):
+   - Every beat of the song (calculated via BPM), the stage and characters pulse 
+     with a punchy 3% zoom (1.03x) and smoothly settle back to 1.0x.
+   - Note: Arrows, receptors, and HUD stay STATIC so player aim is never thrown off.
+
+B. Camera Character Pan:
+   - Camera automatically slides smoothly toward whoever is actively singing:
+     * Boyfriend singing -> Camera pans right toward BF.
+     * Limes singing     -> Camera pans left toward Limes.
+
+C. Top Song Progress Bar:
+   - Displays song name, formatted elapsed time (e.g. 1:14 / 2:38), and fills from 
+     left to right using the song's theme color until completion.
+
+D. Bottom Tug-of-War Health Bar:
+   - Split-color bar (Opponent Green vs. Boyfriend Cyan).
+   - Features animated bouncing character icons at the divider peg that pulse 
+     with the beat zoom.
+   - Hitting notes pushes health up (+0.04); missing drains health (-0.08).
+
+
+================================================================================
+4. HOW TO ADD A NEW SONG (3-MINUTE TUTORIAL)
+================================================================================
+Step 1: Open "assets/songs/" and create a new folder (e.g. "o2").
+Step 2: Place the 3 core files into "assets/songs/o2/":
+        - normal.json (the FNF chart)
+        - Inst.ogg
+        - Voices.ogg
+Step 3: (Optional) Add "bg.png" (800x600) and "banner.png" (360x70) to the folder.
+Step 4: Open "assets/songs/songs.json" and append the new song block:
+        {
+          "id": "o2",
+          "name": "O2",
+          "artist": "Punkett",
+          "folder": "o2",
+          "chart": "normal.json",
+          "color": "#E6194B",
+          "bpm": 165,
+          "difficulty": "Hard"
+        }
+Step 5: Done! The engine will automatically list it in Freeplay and the 
+        Multiplayer Host Song Selector. No code changes needed.
+
+
+================================================================================
+5. CONTROLS & SETTINGS
+================================================================================
+- PC Controls: DFJK or Arrow Keys
+- Taunt: 'T' Key on PC, or the Yellow Square on Mobile
+- Fullscreen: "⛶ FULLSCREEN" button in top-right corner
+- Ghost Tapping:
+  * ON: Tapping with no notes present does not penalize the player.
+  * OFF: Strict FNF rules; tapping empty space counts as a MISS (-50 pts).
+- Mobile Controls Mode:
+  * AUTO: Shows touch hitboxes only if touchscreen is detected.
+  * ON: Forces touch hitboxes & yellow taunt button.
+  * OFF: Completely disables touch hitboxes (pure keyboard mode).
+- Mirror Sprite:
+  * Flips character horizontally so custom art always faces inward.
+- Multiplayer Preloading:
+  * Lobby preloads the song into RAM before players can Ready up to guarantee 
+    sample-accurate, zero-drift synchronization.
