@@ -1,5 +1,5 @@
 /**
- * engine.js (Tuned Scroll Speed & Smooth Reaction Window)
+ * engine.js (Tuned Speed, Opponent Receptor Sync & Live 1v1 HUD)
  * Save in ROOT folder
  */
 
@@ -42,10 +42,10 @@ export class RhythmEngine {
     this.spawnIndex = 0;
 
     // Game Mode & Role: 'bf' (Player 1) or 'limes' (Player 2)
-    this.gameMode = 'single'; // 'single' | 'multiplayer'
-    this.playerRole = 'bf';   // 'bf' controls right side, 'limes' controls left side
+    this.gameMode = 'single';
+    this.playerRole = 'bf';
 
-    // Keys & Stats
+    // Local Keys & Stats
     this.keysHeld = [false, false, false, false];
     this.score = 0;
     this.combo = 0;
@@ -54,6 +54,11 @@ export class RhythmEngine {
     this.totalNotesPlayed = 0;
     this.accuracy = 100.0;
     this.lastRating = "";
+
+    // Opponent Live Tracking (Multiplayer)
+    this.opponentScore = 0;
+    this.opponentAccuracy = 100.0;
+    this.opponentKeyTimers = [0, 0, 0, 0]; // Receptor flash timers
 
     // Pose Timers
     this.bfPoseTimer = 0;
@@ -69,7 +74,7 @@ export class RhythmEngine {
   }
 
   setRole(role) {
-    this.playerRole = role; // 'bf' or 'limes'
+    this.playerRole = role;
   }
 
   setupInputs() {
@@ -119,17 +124,14 @@ export class RhythmEngine {
     }
   }
 
-  start(startTimeInSeconds = null) {
-    this.audio.initContext().then(() => {
-      this.state = 'PLAYING';
-      if (startTimeInSeconds) {
-        // Scheduled timestamp from server
-        this.audio.playAt(startTimeInSeconds);
-      } else {
-        // Immediate local playback (Singleplayer)
-        this.audio.playNow();
-      }
-    });
+  async start(startTimeInSeconds = null) {
+    await this.audio.initContext();
+    this.state = 'PLAYING';
+    if (startTimeInSeconds) {
+      this.audio.playAt(startTimeInSeconds);
+    } else {
+      this.audio.playNow();
+    }
   }
 
   handleKeyPress(lane) {
@@ -137,7 +139,6 @@ export class RhythmEngine {
     let hitNote = null;
     let minDiff = Infinity;
 
-    // 'bf' hits isPlayer === true | 'limes' hits isPlayer === false
     const targetIsPlayer = (this.playerRole === 'bf');
 
     this.pool.forEachActive(note => {
@@ -191,6 +192,32 @@ export class RhythmEngine {
     this.updateAccuracy();
   }
 
+  /**
+   * Called when network packet arrives showing opponent hit a note
+   */
+  handleOpponentNoteHit(data) {
+    const { lane, rating, score, accuracy } = data;
+    this.opponentScore = score || 0;
+    this.opponentAccuracy = accuracy || 100.0;
+    this.opponentKeyTimers[lane] = 0.18; // Flash opponent receptor for 180ms
+
+    // Trigger opponent dance pose
+    if (this.playerRole === 'bf') {
+      this.limesPoseTimer = 0.3;
+    } else {
+      this.bfPoseTimer = 0.3;
+    }
+
+    // Pop the opponent's note off screen
+    const targetIsPlayer = (this.playerRole !== 'bf');
+    this.pool.forEachActive(note => {
+      if (note.isPlayer === targetIsPlayer && note.lane === lane && !note.hit) {
+        note.hit = true;
+        note.kill();
+      }
+    });
+  }
+
   updateAccuracy() {
     this.totalNotesPlayed = this.hits.sick + this.hits.good + this.hits.bad + this.hits.shit + this.hits.miss;
     if (this.totalNotesPlayed === 0) return;
@@ -208,8 +235,8 @@ export class RhythmEngine {
       return;
     }
 
-    // Spawn window: Gives notes enough runway from bottom of screen
-    const spawnWindow = 2.5 / this.speed;
+    // Spawn Window calibrated for comfortable scroll
+    const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
       if (data.time - songTime <= spawnWindow) {
@@ -226,24 +253,26 @@ export class RhythmEngine {
     const humanIsPlayer = (this.playerRole === 'bf');
 
     this.pool.forEachActive(note => {
-      // Tuned scroll multiplier: 240 pixels/sec creates standard comfortable FNF speed
-      const distance = (note.strumTime - songTime) * (240 * this.speed);
+      // 160 pixels/sec multiplier creates a smooth, comfortable reaction pace
+      const distance = (note.strumTime - songTime) * (160 * this.speed);
       note.y = this.receptorY + distance;
 
       const isBotNote = (note.isPlayer !== humanIsPlayer);
 
-      // In Singleplayer, Bot auto-hits the other character
+      // Singleplayer Botplay
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.isPlayer) {
           this.bfPoseTimer = 0.3;
+          this.opponentKeyTimers[note.lane] = 0.15;
         } else {
           this.limesPoseTimer = 0.3;
+          this.opponentKeyTimers[note.lane] = 0.15;
         }
         note.kill();
       }
 
-      // Check for human misses
+      // Check human misses
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -255,8 +284,12 @@ export class RhythmEngine {
       }
     });
 
+    // Pose and flash timers
     if (this.bfPoseTimer > 0) this.bfPoseTimer -= dt;
     if (this.limesPoseTimer > 0) this.limesPoseTimer -= dt;
+    for (let i = 0; i < 4; i++) {
+      if (this.opponentKeyTimers[i] > 0) this.opponentKeyTimers[i] -= dt;
+    }
   }
 
   render() {
@@ -274,13 +307,18 @@ export class RhythmEngine {
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // Draw Receptors
+    // Draw Receptors (With Opponent Flash Lighting!)
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
 
-      this.drawArrow(ctx, oppBaseX + i * this.laneWidth, this.receptorY, i, true, isLimesHuman && this.keysHeld[i]);
-      this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, isBfHuman && this.keysHeld[i]);
+      // Left Receptors (Limes)
+      const limesActive = isLimesHuman ? this.keysHeld[i] : (this.opponentKeyTimers[i] > 0);
+      this.drawArrow(ctx, oppBaseX + i * this.laneWidth, this.receptorY, i, true, limesActive);
+
+      // Right Receptors (Boyfriend)
+      const bfActive = isBfHuman ? this.keysHeld[i] : (this.opponentKeyTimers[i] > 0);
+      this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
     // Draw Active Notes
@@ -316,7 +354,7 @@ export class RhythmEngine {
       ctx.stroke();
       if (isPressed) {
         ctx.fillStyle = ARROW_COLORS[direction];
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.6;
         ctx.fill();
       }
     } else {
@@ -335,20 +373,29 @@ export class RhythmEngine {
     ctx.fillRect(120, 360, 100, 140);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : " (BOT)"), 130, 435);
+    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : ""), 135, 435);
 
     const bfPose = this.bfPoseTimer > 0;
     ctx.fillStyle = bfPose ? '#38A8FF' : '#175294';
     ctx.fillRect(520, 360, 100, 140);
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : " (BOT)"), 545, 435);
+    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : ""), 550, 435);
   }
 
   renderHUD(ctx) {
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 16px monospace';
-    const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
-    ctx.fillText(statsText, 140, this.height - 30);
+    ctx.font = 'bold 15px monospace';
+
+    // Live 1v1 Split Screen Score Tracker
+    if (this.gameMode === 'multiplayer') {
+      const youLead = this.score >= this.opponentScore;
+      ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
+      const hudText = `YOU: ${this.score} (${this.accuracy}%)  VS  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
+      ctx.fillText(hudText, 110, this.height - 30);
+    } else {
+      const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
+      ctx.fillText(statsText, 140, this.height - 30);
+    }
 
     if (this.lastRating) {
       ctx.font = 'bold 24px sans-serif';
