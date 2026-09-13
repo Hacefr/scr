@@ -61,7 +61,7 @@ canvas {
   color: #0b0c10;
 }
 
-/* Bottom-Left Version Badge (Psych Engine Style) */
+/* Psych Engine Style Version Badge */
 #version-tag {
   position: absolute;
   bottom: 8px;
@@ -83,7 +83,7 @@ canvas {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(17, 19, 24, 0.92);
+  background: rgba(17, 19, 24, 0.94);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -118,7 +118,7 @@ h2 {
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.15s ease;
-  min-width: 200px;
+  min-width: 220px;
   text-align: center;
 }
 
@@ -134,6 +134,46 @@ h2 {
 .btn-ready:hover {
   background: #55e840;
   color: #000;
+}
+
+/* Song Selection List */
+.song-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  width: 320px;
+  padding: 5px;
+}
+
+.song-card {
+  background: rgba(31, 40, 51, 0.8);
+  border: 2px solid #45a29e;
+  border-left: 6px solid #55e840;
+  padding: 10px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.song-card:hover {
+  transform: translateX(4px);
+  background: rgba(69, 162, 158, 0.25);
+}
+
+.song-card-title {
+  font-weight: bold;
+  color: #fff;
+  font-size: 15px;
+}
+
+.song-card-artist {
+  font-size: 11px;
+  color: #aaa;
 }
 
 input {
