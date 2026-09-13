@@ -22,6 +22,11 @@
     <!-- Fullscreen Button -->
     <button id="btn-fullscreen">⛶ FULLSCREEN</button>
 
+    <!-- Psych Engine Style Version & Live GitHub Status Tag -->
+    <div id="version-tag">
+      v1.3.2 <span id="version-status" style="color:#666;">(checking...)</span>
+    </div>
+
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <!-- Disconnect Banner -->
@@ -31,17 +36,18 @@
     <div id="menu-main" class="overlay">
       <h1>STARGAZER</h1>
       <p style="color: #888;">Low-End Optimized 1v1 Rhythm Engine</p>
-      <button id="btn-to-single" class="btn">SINGLEPLAYER (VS BOT)</button>
+      <!-- Renamed to FREEPLAY -->
+      <button id="btn-to-freeplay" class="btn">FREEPLAY (VS BOT)</button>
       <button id="btn-to-multi" class="btn">MULTIPLAYER (1v1)</button>
     </div>
 
-    <!-- SINGLEPLAYER ROLE SELECT -->
-    <div id="menu-single" class="overlay hidden">
-      <h2>SELECT YOUR CHARACTER</h2>
-      <p id="single-loading-status" style="color: #66fcf1; font-size: 13px;">Checking audio...</p>
-      <button id="btn-single-bf" class="btn">BOYFRIEND (RIGHT)</button>
-      <button id="btn-single-limes" class="btn">LIMES (LEFT)</button>
-      <button id="btn-single-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
+    <!-- FREEPLAY ROLE SELECT -->
+    <div id="menu-freeplay" class="overlay hidden">
+      <h2>FREEPLAY CHARACTER SELECT</h2>
+      <p id="freeplay-loading-status" style="color: #66fcf1; font-size: 13px;">Checking audio...</p>
+      <button id="btn-freeplay-bf" class="btn">BOYFRIEND (RIGHT)</button>
+      <button id="btn-freeplay-limes" class="btn">LIMES (LEFT)</button>
+      <button id="btn-freeplay-back" class="btn" style="border-color:#888; color:#888;">BACK</button>
     </div>
 
     <!-- MULTIPLAYER LOBBY -->
@@ -76,13 +82,58 @@
     import { RhythmEngine } from './engine.js';
     import { NetworkManager } from './network.js';
 
+    const CURRENT_VERSION = "v1.3.2";
+    const GITHUB_REPO = "Hacefr/scr";
+
     const canvas = document.getElementById('gameCanvas');
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
     const assetLoadPromise = engine.loadAssets();
 
-    // Fullscreen Toggle
+    // 1. Live GitHub Workflow & Version Checker
+    async function checkGitHubUpdates() {
+      const statusEl = document.getElementById('version-status');
+      try {
+        // Check active workflow runs (deploying actions)
+        const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`);
+        if (runsRes.ok) {
+          const runsData = await runsRes.json();
+          const latestRun = runsData.workflow_runs && runsData.workflow_runs[0];
+
+          if (latestRun && (latestRun.status === 'in_progress' || latestRun.status === 'queued')) {
+            statusEl.innerText = "(partial update deploying...)";
+            statusEl.style.color = "#FFAA00"; // Orange
+            return;
+          }
+        }
+
+        // Check latest commit vs build
+        const commitRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/main`);
+        if (commitRes.ok) {
+          const commitData = await commitRes.json();
+          const commitDate = new Date(commitData.commit.committer.date);
+          const pageLoadedDate = new Date();
+
+          // If GitHub commit is newer than when the script was authored/loaded
+          const diffMinutes = (pageLoadedDate - commitDate) / (1000 * 60);
+
+          if (diffMinutes < 30) {
+            statusEl.innerText = "(latest)";
+            statusEl.style.color = "#55e840"; // Green
+          } else {
+            statusEl.innerText = "(latest)";
+            statusEl.style.color = "#66fcf1";
+          }
+        }
+      } catch (err) {
+        // Fallback gracefully if offline or rate-limited
+        statusEl.innerText = "";
+      }
+    }
+    checkGitHubUpdates();
+
+    // 2. Fullscreen Toggle
     const btnFullscreen = document.getElementById('btn-fullscreen');
     btnFullscreen.onclick = () => {
       const wrapper = document.getElementById('game-wrapper');
@@ -96,13 +147,13 @@
     };
 
     const menuMain = document.getElementById('menu-main');
-    const menuSingle = document.getElementById('menu-single');
+    const menuFreeplay = document.getElementById('menu-freeplay');
     const menuMulti = document.getElementById('menu-multi');
     const menuResults = document.getElementById('menu-results');
     const resultsTitle = document.getElementById('results-title');
     const resultsBody = document.getElementById('results-body');
     const disconnectBanner = document.getElementById('disconnect-banner');
-    const singleLoadingStatus = document.getElementById('single-loading-status');
+    const freeplayLoadingStatus = document.getElementById('freeplay-loading-status');
 
     const lobbyConnectBox = document.getElementById('lobby-connect-box');
     const lobbyRoomBox = document.getElementById('lobby-room-box');
@@ -110,16 +161,17 @@
     const lobbyStatusText = document.getElementById('lobby-status-text');
 
     assetLoadPromise.then(() => {
-      singleLoadingStatus.innerText = "Audio loaded and ready!";
-      singleLoadingStatus.style.color = "#55e840";
+      freeplayLoadingStatus.innerText = "Audio loaded and ready!";
+      freeplayLoadingStatus.style.color = "#55e840";
     });
 
-    document.getElementById('btn-to-single').onclick = () => {
+    // 3. Navigation
+    document.getElementById('btn-to-freeplay').onclick = () => {
       menuMain.classList.add('hidden');
-      menuSingle.classList.remove('hidden');
+      menuFreeplay.classList.remove('hidden');
     };
-    document.getElementById('btn-single-back').onclick = () => {
-      menuSingle.classList.add('hidden');
+    document.getElementById('btn-freeplay-back').onclick = () => {
+      menuFreeplay.classList.add('hidden');
       menuMain.classList.remove('hidden');
     };
     document.getElementById('btn-to-multi').onclick = () => {
@@ -136,19 +188,21 @@
       engine.state = 'READY';
     };
 
-    async function startSinglePlayer(role) {
-      singleLoadingStatus.innerText = "Buffering audio tracks, please wait...";
+    // 4. Freeplay Start
+    async function startFreeplay(role) {
+      freeplayLoadingStatus.innerText = "Buffering audio tracks, please wait...";
       await assetLoadPromise;
 
-      menuSingle.classList.add('hidden');
+      menuFreeplay.classList.add('hidden');
       engine.gameMode = 'single';
       engine.setRole(role);
       await engine.startWithCountdown(2.4);
     }
 
-    document.getElementById('btn-single-bf').onclick = () => startSinglePlayer('bf');
-    document.getElementById('btn-single-limes').onclick = () => startSinglePlayer('limes');
+    document.getElementById('btn-freeplay-bf').onclick = () => startFreeplay('bf');
+    document.getElementById('btn-freeplay-limes').onclick = () => startFreeplay('limes');
 
+    // 5. Multiplayer Lobby
     document.getElementById('btn-join-room').onclick = () => {
       const serverUrl = document.getElementById('input-server-url').value.trim();
       const code = document.getElementById('input-room-code').value.trim();
