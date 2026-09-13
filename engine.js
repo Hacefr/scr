@@ -1,6 +1,16 @@
 /**
  * engine.js
- * Complete Core Canvas Engine
+ * Core Canvas Rhythm Game Engine
+ * Features:
+ * - Top Song Progress & Time Bar
+ * - Bottom VS Tug-of-War Health Bar with Animated Bouncing Icons
+ * - Corrected Camera Pan (faces active singer) & Rhythmic Beat Bop
+ * - Hold / Sustain Notes with Trails & Continuous Scoring
+ * - Live Ping Display (Local & Opponent) on HUD
+ * - Clean Menu Rendering (No ghost gameplay in menus)
+ * - Taunt Mechanic (Key T / Mobile Yellow Button) & Miss Poses
+ * - Fit-To-Frame Scaling & Ground Floor Anchoring
+ * - Dynamic Multi-Song loader with custom bg.png
  */
 
 import { AudioManager } from './audio.js';
@@ -43,17 +53,20 @@ export class RhythmEngine {
     this.spawnIndex = 0;
     this.totalSongDuration = 120;
 
-    // Camera Beat Bop & Pan
+    // Camera Beat Bop & Pan States
     this.camZoom = 1.0;
     this.camX = 0;
     this.targetCamX = 0;
     this.lastBeat = -1;
 
+    // Tug-of-War Health (0.05 to 1.95)
     this.health = 1.0;
 
+    // Stage Background
     this.stageBg = new Image();
     this.hasBg = false;
 
+    // Custom Skins Store
     this.customSkins = {
       local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null },
       opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null }
@@ -67,15 +80,18 @@ export class RhythmEngine {
     this.ghostTapping = true;
     this.mobileControlsMode = 'auto';
 
+    // Countdown State
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
     this.targetStartAudioTime = 0;
 
+    // Touch & Inputs
     this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     this.keysHeld = [false, false, false, false];
     this.activeTouches = new Map();
 
+    // Stats
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -84,6 +100,11 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
+    // Live Ping Metrics
+    this.localPing = 0;
+    this.opponentPing = 0;
+
+    // Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
     this.bfPoseDir = -1;
@@ -96,6 +117,7 @@ export class RhythmEngine {
 
     this.mirrorSprite = false;
 
+    // Opponent Live Tracking
     this.opponentScore = 0;
     this.opponentAccuracy = 100.0;
     this.opponentKeyTimers = [0, 0, 0, 0];
@@ -338,11 +360,11 @@ export class RhythmEngine {
       if (this.playerRole === 'bf') {
         this.bfPoseTimer = 0.3;
         this.bfPoseDir = lane;
-        this.targetCamX = 25;
+        this.targetCamX = 25; // Focus BF (Right side)
       } else {
         this.limesPoseTimer = 0.3;
         this.limesPoseDir = lane;
-        this.targetCamX = -25;
+        this.targetCamX = -25; // Focus Limes (Left side)
       }
 
       if (this.onNoteHitCallback) {
@@ -430,6 +452,7 @@ export class RhythmEngine {
 
     const songTime = this.audio.getCurrentSongTime();
 
+    // Camera Beat Bop (Rhythmic 3% punch on every beat)
     if (this.bpm > 0) {
       const currentBeat = Math.floor(songTime * (this.bpm / 60));
       if (currentBeat !== this.lastBeat && currentBeat >= 0) {
@@ -440,6 +463,7 @@ export class RhythmEngine {
     this.camZoom += (1.0 - this.camZoom) * 10 * dt;
     this.camX += (this.targetCamX - this.camX) * 4 * dt;
 
+    // Song completion check
     if (this.spawnIndex >= this.chartNotes.length && songTime > (this.chartNotes[this.chartNotes.length - 1].time + 2.0)) {
       this.state = 'FINISHED';
       return;
@@ -469,6 +493,7 @@ export class RhythmEngine {
       const isBotNote = (note.isPlayer !== humanIsPlayer);
       const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
+      // Sustain Hold Logic
       if (note.isHolding) {
         if (!isBotNote) {
           if (this.keysHeld[note.lane]) {
@@ -496,6 +521,7 @@ export class RhythmEngine {
         }
       }
 
+      // Bot Auto-Hit
       if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
         if (note.sustainLength > 0) {
@@ -508,6 +534,7 @@ export class RhythmEngine {
         }
       }
 
+      // Human Miss
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
@@ -550,7 +577,9 @@ export class RhythmEngine {
       return;
     }
 
-    // 1. LAYER 1: STAGE (Correct negative translation camera)
+    // ==========================================
+    // LAYER 1: STAGE (Correct negative translation camera)
+    // ==========================================
     ctx.save();
     ctx.translate(this.width / 2 - this.camX, this.height / 2);
     ctx.scale(this.camZoom, this.camZoom);
@@ -568,12 +597,16 @@ export class RhythmEngine {
     this.renderCharacters(ctx);
     ctx.restore();
 
-    // 2. LAYER 2: MOBILE TOUCH HITBOXES
+    // ==========================================
+    // LAYER 2: MOBILE TOUCH HITBOXES
+    // ==========================================
     if (this.shouldShowMobileUI()) {
       this.renderTouchHitboxes(ctx);
     }
 
-    // 3. LAYER 3: RECEPTORS & NOTES
+    // ==========================================
+    // LAYER 3: RECEPTORS & NOTES
+    // ==========================================
     const oppBaseX = 80;
     const playerBaseX = 460;
 
@@ -620,7 +653,9 @@ export class RhythmEngine {
       }
     });
 
-    // 4. LAYER 4: BARS & HUD
+    // ==========================================
+    // LAYER 4: TOP TIME BAR, BOTTOM TUG-OF-WAR & HUD
+    // ==========================================
     this.renderTopTimeBar(ctx);
     this.renderBottomHealthBar(ctx);
     this.renderHUD(ctx);
@@ -743,9 +778,19 @@ export class RhythmEngine {
 
     if (this.gameMode === 'multiplayer') {
       const youLead = this.score >= this.opponentScore;
-      ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
+      ctx.fillStyle = youLead ? '#55E840' : '#FF3855';
       const hudText = `YOU: ${this.score} (${this.accuracy}%)  vs  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
       ctx.fillText(hudText, this.width / 2, hudY);
+
+      // Render Live Pings in Bottom Corners
+      ctx.save();
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#888888';
+      ctx.textAlign = 'left';
+      ctx.fillText(`PING: ${this.localPing || 0}ms`, 14, this.height - 18);
+      ctx.textAlign = 'right';
+      ctx.fillText(`OPP PING: ${this.opponentPing || 0}ms`, this.width - 14, this.height - 18);
+      ctx.restore();
     } else {
       const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
       ctx.fillText(statsText, this.width / 2, hudY);
@@ -753,7 +798,7 @@ export class RhythmEngine {
 
     if (this.lastRating) {
       ctx.font = 'bold 24px sans-serif';
-      ctx.fillStyle = this.lastRating === 'MISS' ? '#FF3333' : '#FFDD00';
+      ctx.fillStyle = this.lastRating === 'MISS' ? '#FF3855' : '#FDE871';
       ctx.fillText(this.lastRating, this.width / 2, 230);
     }
     ctx.textAlign = 'left';
