@@ -1,22 +1,13 @@
 /**
- * engine.js
- * Core Canvas Rhythm Game Engine
- * Features procedural rendering, Web Audio sync, and zero-allocation note pooling.
+ * engine.js (Updated for Singleplayer + Multiplayer Roles)
  */
 
 import { AudioManager } from './audio.js';
 import { ChartParser } from './parser.js';
 import { NotePool } from './pool.js';
 
-// Directional Arrow Colors (FNF standard)
-const ARROW_COLORS = [
-  '#C24B99', // 0: Left (Purple)
-  '#00FFFF', // 1: Down (Cyan)
-  '#12FA05', // 2: Up (Green)
-  '#F9393F'  // 3: Right (Red)
-];
+const ARROW_COLORS = ['#C24B99', '#00FFFF', '#12FA05', '#F9393F'];
 
-// Keybind Mappings (DFJK + Arrow Keys)
 const KEY_MAP = {
   KeyD: 0, ArrowLeft: 0,
   KeyF: 1, ArrowDown: 1,
@@ -24,12 +15,11 @@ const KEY_MAP = {
   KeyK: 3, ArrowRight: 3
 };
 
-// Hit Windows (in seconds)
 const TIMING_WINDOWS = {
-  sick: 0.045, // +/- 45ms
-  good: 0.090, // +/- 90ms
-  bad:  0.135, // +/- 135ms
-  shit: 0.166  // +/- 166ms
+  sick: 0.045,
+  good: 0.090,
+  bad:  0.135,
+  shit: 0.166
 };
 
 export class RhythmEngine {
@@ -37,26 +27,26 @@ export class RhythmEngine {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
 
-    // Core Subsystems
     this.audio = new AudioManager();
     this.pool = new NotePool(160);
     this.chart = null;
 
-    // Dimensions & Layout
     this.width = canvas.width;
     this.height = canvas.height;
     this.laneWidth = 60;
-    this.receptorY = 80; // Upscroll receptor Y position
-    this.speed = 2.9;    // From normal.json
+    this.receptorY = 80;
+    this.speed = 2.9;
 
-    // Note Spawning Cursor
     this.chartNotes = [];
     this.spawnIndex = 0;
 
-    // Input States (Lanes 0-3)
-    this.keysHeld = [false, false, false, false];
+    // Game Mode & Role: 'bf' (Player 1) or 'limes' (Player 2)
+    this.gameMode = 'single'; // 'single' | 'multiplayer'
+    this.playerRole = 'bf';   // 'bf' controls right side, 'limes' controls left side
+    this.isBotplayOpponent = true;
 
-    // Scoring & Stats
+    // Keys & Stats
+    this.keysHeld = [false, false, false, false];
     this.score = 0;
     this.combo = 0;
     this.highestCombo = 0;
@@ -65,17 +55,21 @@ export class RhythmEngine {
     this.accuracy = 100.0;
     this.lastRating = "";
 
-    // Character Dance/Pose Timers (seconds)
+    // Pose Timers
     this.bfPoseTimer = 0;
     this.limesPoseTimer = 0;
-    this.bfPoseDirection = -1;
-    this.limesPoseDirection = -1;
 
-    // Engine State
-    this.state = 'LOADING'; // LOADING | READY | PLAYING | FINISHED
+    // Multiplayer Hook
+    this.onNoteHitCallback = null;
+
+    this.state = 'LOADING';
     this.loadingStatus = "Initializing...";
 
     this.setupInputs();
+  }
+
+  setRole(role) {
+    this.playerRole = role; // 'bf' or 'limes'
   }
 
   setupInputs() {
@@ -98,9 +92,6 @@ export class RhythmEngine {
     });
   }
 
-  /**
-   * Preloads normal.json, Inst.ogg, and Voices.ogg in parallel.
-   */
   async loadAssets() {
     try {
       this.loadingStatus = "Loading audio tracks...";
@@ -120,7 +111,7 @@ export class RhythmEngine {
       this.speed = this.chart.speed || 2.9;
 
       this.state = 'READY';
-      this.loadingStatus = "Ready! Click or press Space to play.";
+      this.loadingStatus = "Loaded!";
     } catch (err) {
       this.state = 'ERROR';
       this.loadingStatus = `Error: ${err.message}`;
@@ -128,11 +119,16 @@ export class RhythmEngine {
     }
   }
 
-  start() {
-    if (this.state !== 'READY') return;
+  start(startTimeInSeconds = null) {
     this.audio.initContext().then(() => {
       this.state = 'PLAYING';
-      this.audio.playNow();
+      if (startTimeInSeconds) {
+        // Scheduled timestamp from server
+        this.audio.playAt(startTimeInSeconds);
+      } else {
+        // Immediate local playback (Singleplayer)
+        this.audio.playNow();
+      }
     });
   }
 
@@ -141,9 +137,12 @@ export class RhythmEngine {
     let hitNote = null;
     let minDiff = Infinity;
 
-    // Find the closest active unhit player note in this lane
+    // Human hits notes for their selected character
+    // 'bf' hits isPlayer === true | 'limes' hits isPlayer === false
+    const targetIsPlayer = (this.playerRole === 'bf');
+
     this.pool.forEachActive(note => {
-      if (note.isPlayer && note.lane === lane && !note.hit) {
+      if (note.isPlayer === targetIsPlayer && note.lane === lane && !note.hit) {
         const diff = Math.abs(note.strumTime - songTime);
         if (diff <= TIMING_WINDOWS.shit && diff < minDiff) {
           minDiff = diff;
@@ -156,22 +155,15 @@ export class RhythmEngine {
       hitNote.hit = true;
       hitNote.kill();
 
-      // Determine Judgment
       let rating = "shit";
       let pts = 50;
 
       if (minDiff <= TIMING_WINDOWS.sick) {
-        rating = "SICK!";
-        pts = 350;
-        this.hits.sick++;
+        rating = "SICK!"; pts = 350; this.hits.sick++;
       } else if (minDiff <= TIMING_WINDOWS.good) {
-        rating = "GOOD";
-        pts = 200;
-        this.hits.good++;
+        rating = "GOOD"; pts = 200; this.hits.good++;
       } else if (minDiff <= TIMING_WINDOWS.bad) {
-        rating = "BAD";
-        pts = 100;
-        this.hits.bad++;
+        rating = "BAD"; pts = 100; this.hits.bad++;
       } else {
         this.hits.shit++;
       }
@@ -181,11 +173,17 @@ export class RhythmEngine {
       if (this.combo > this.highestCombo) this.highestCombo = this.combo;
       this.lastRating = rating;
 
-      // BF Pose Trigger
-      this.bfPoseDirection = lane;
-      this.bfPoseTimer = 0.3; // Hold pose for 300ms
+      if (this.playerRole === 'bf') {
+        this.bfPoseTimer = 0.3;
+      } else {
+        this.limesPoseTimer = 0.3;
+      }
+
+      // Broadcast hit to opponent if in multiplayer
+      if (this.onNoteHitCallback) {
+        this.onNoteHitCallback({ lane, rating, score: this.score, accuracy: this.accuracy });
+      }
     } else {
-      // Ghost tapping penalty (miss)
       this.score = Math.max(0, this.score - 50);
       this.combo = 0;
       this.hits.miss++;
@@ -207,14 +205,11 @@ export class RhythmEngine {
 
     const songTime = this.audio.getCurrentSongTime();
 
-    // 1. Check for end of song
     if (this.spawnIndex >= this.chartNotes.length && songTime > (this.chartNotes[this.chartNotes.length - 1].time + 2.0)) {
       this.state = 'FINISHED';
       return;
     }
 
-    // 2. Stream notes from sorted chart list into active pool
-    // Visible horizon: ~1.5 seconds in advance
     const spawnWindow = 1.5 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -229,23 +224,27 @@ export class RhythmEngine {
       }
     }
 
-    // 3. Update & Cull Active Notes
+    const humanIsPlayer = (this.playerRole === 'bf');
+
     this.pool.forEachActive(note => {
-      // Calculate Canvas Y position (Upscroll: travels upwards towards receptorY)
-      // speed factor: 450 pixels/sec * speed multiplier
       const distance = (note.strumTime - songTime) * (450 * this.speed);
       note.y = this.receptorY + distance;
 
-      // Botplay auto-trigger for Opponent (Limes)
-      if (!note.isPlayer && !note.hit && songTime >= note.strumTime) {
+      const isBotNote = (note.isPlayer !== humanIsPlayer);
+
+      // In Singleplayer, Bot auto-hits the opponent character
+      if (this.gameMode === 'single' && isBotNote && !note.hit && songTime >= note.strumTime) {
         note.hit = true;
-        this.limesPoseDirection = note.lane;
-        this.limesPoseTimer = 0.3;
+        if (note.isPlayer) {
+          this.bfPoseTimer = 0.3; // Bot is playing BF
+        } else {
+          this.limesPoseTimer = 0.3; // Bot is playing Limes
+        }
         note.kill();
       }
 
-      // Check for missed player notes (passed receptor window)
-      if (note.isPlayer && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
+      // Check for human misses
+      if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
         this.combo = 0;
@@ -256,7 +255,6 @@ export class RhythmEngine {
       }
     });
 
-    // 4. Character pose timers
     if (this.bfPoseTimer > 0) this.bfPoseTimer -= dt;
     if (this.limesPoseTimer > 0) this.limesPoseTimer -= dt;
   }
@@ -265,7 +263,6 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // Background Dim
     ctx.fillStyle = '#111318';
     ctx.fillRect(0, 0, this.width, this.height);
 
@@ -274,41 +271,32 @@ export class RhythmEngine {
       return;
     }
 
-    // Lane Base X coordinates
-    // Opponent (Left side): x = 80
-    // Player (Right side): x = 460
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // Draw Receptors (Static Target Arrows)
+    // Draw Receptors
     for (let i = 0; i < 4; i++) {
-      this.drawArrow(ctx, oppBaseX + i * this.laneWidth, this.receptorY, i, false, false);
-      const isHeld = this.keysHeld[i];
-      this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, isHeld);
+      const isLimesHuman = (this.playerRole === 'limes');
+      const isBfHuman = (this.playerRole === 'bf');
+
+      this.drawArrow(ctx, oppBaseX + i * this.laneWidth, this.receptorY, i, true, isLimesHuman && this.keysHeld[i]);
+      this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, isBfHuman && this.keysHeld[i]);
     }
 
-    // Draw Falling/Rising Notes from Pool
+    // Draw Active Notes
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
       this.drawArrow(ctx, x, note.y, note.lane, false, false);
     });
 
-    // Draw Character Placeholders
     this.renderCharacters(ctx);
-
-    // Draw HUD (Score, Combo, Accuracy, Rating)
     this.renderHUD(ctx);
   }
 
-  /**
-   * Procedural Arrow Renderer (Crisp vector shapes, 0 image asset overhead)
-   */
   drawArrow(ctx, x, y, direction, isReceptor, isPressed) {
     ctx.save();
     ctx.translate(x + 24, y + 24);
-
-    // Rotation: 0=Left (-90deg), 1=Down (180deg), 2=Up (0deg), 3=Right (90deg)
     const angles = [-Math.PI / 2, Math.PI, 0, Math.PI / 2];
     ctx.rotate(angles[direction]);
 
@@ -338,36 +326,30 @@ export class RhythmEngine {
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
-
     ctx.restore();
   }
 
   renderCharacters(ctx) {
-    // Left: Limes Box / Avatar Placeholder
     const limesPose = this.limesPoseTimer > 0;
     ctx.fillStyle = limesPose ? '#55E840' : '#2A7A20';
     ctx.fillRect(120, 360, 100, 140);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText("LIMES", 145, 435);
+    ctx.fillText("LIMES" + (this.playerRole === 'limes' ? " (YOU)" : " (BOT)"), 130, 435);
 
-    // Right: Boyfriend Box / Avatar Placeholder
     const bfPose = this.bfPoseTimer > 0;
     ctx.fillStyle = bfPose ? '#38A8FF' : '#175294';
     ctx.fillRect(520, 360, 100, 140);
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText("BOYFRIEND", 530, 435);
+    ctx.fillText("BF" + (this.playerRole === 'bf' ? " (YOU)" : " (BOT)"), 545, 435);
   }
 
   renderHUD(ctx) {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 16px monospace';
-
-    // Score & Accuracy Bar at Bottom
-    const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Accuracy: ${this.accuracy}%`;
+    const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
     ctx.fillText(statsText, 140, this.height - 30);
 
-    // Rating Popup
     if (this.lastRating) {
       ctx.font = 'bold 24px sans-serif';
       ctx.fillStyle = this.lastRating === 'MISS' ? '#FF3333' : '#FFDD00';
@@ -379,7 +361,7 @@ export class RhythmEngine {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '18px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText("--- STARGAZER (VS IMPOSTOR) ---", this.width / 2, this.height / 2 - 40);
+    ctx.fillText("--- STARGAZER ---", this.width / 2, this.height / 2 - 40);
     ctx.font = '14px monospace';
     ctx.fillText(this.loadingStatus, this.width / 2, this.height / 2);
     ctx.textAlign = 'left';
