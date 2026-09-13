@@ -1,6 +1,11 @@
 /**
- * engine.js (Zero-Desync Audio Preload & Mobile Controls Setting)
- * Save in ROOT folder
+ * engine.js
+ * Core Canvas Rhythm Game Engine
+ * Features:
+ * - Top Song Progress & Time Bar
+ * - Bottom VS Tug-of-War Health Bar
+ * - Camera Beat Bop (rhythmic pulse) & Character Pan
+ * - Sustain Hold Notes, Taunts, Custom Skins, and Ghost Tapping
  */
 
 import { AudioManager } from './audio.js';
@@ -35,17 +40,28 @@ export class RhythmEngine {
     this.width = canvas.width;
     this.height = canvas.height;
     this.laneWidth = 60;
-    this.receptorY = 80;
+    this.receptorY = 70; // Positioned cleanly below the top time bar
     this.speed = 2.9;
+    this.bpm = 150;
 
     this.chartNotes = [];
     this.spawnIndex = 0;
+    this.totalSongDuration = 120; // Updated when chart loads
+
+    // Camera Beat Bop & Pan States
+    this.camZoom = 1.0;
+    this.camX = 0;
+    this.targetCamX = 0;
+    this.lastBeat = -1;
+
+    // Tug-of-War Health (0.0 = Limes wins, 2.0 = BF wins, 1.0 = 50/50)
+    this.health = 1.0;
 
     // Stage Background
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Custom Skins Store
+    // Custom Skins
     this.customSkins = {
       local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null },
       opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null }
@@ -57,11 +73,9 @@ export class RhythmEngine {
     this.gameMode = 'single';
     this.playerRole = 'bf';
     this.ghostTapping = true;
-
-    // Mobile Controls Mode: 'auto' | 'on' | 'off'
     this.mobileControlsMode = 'auto';
 
-    // Countdown State
+    // Countdown
     this.countdownTimer = 0;
     this.countdownText = "";
     this.countdownColor = "#FFFFFF";
@@ -247,6 +261,13 @@ export class RhythmEngine {
       this.chart = ChartParser.parse(rawJson);
       this.chartNotes = this.chart.notes;
       this.speed = this.chart.speed || 2.9;
+      this.bpm = this.chart.bpm || 150;
+
+      // Compute total duration from last note
+      if (this.chartNotes.length > 0) {
+        const last = this.chartNotes[this.chartNotes.length - 1];
+        this.totalSongDuration = last.time + (last.sustainLength || 0) + 1.5;
+      }
 
       this.pool.clear();
       this.spawnIndex = 0;
@@ -254,7 +275,9 @@ export class RhythmEngine {
       this.combo = 0;
       this.hits = { sick: 0, good: 0, bad: 0, shit: 0, miss: 0 };
       this.accuracy = 100.0;
+      this.health = 1.0;
       this.lastRating = "";
+      this.lastBeat = -1;
 
       this.state = 'READY';
       this.loadingStatus = "Ready!";
@@ -309,8 +332,10 @@ export class RhythmEngine {
 
       if (minDiff <= TIMING_WINDOWS.sick) {
         rating = "SICK!"; pts = 350; this.hits.sick++;
+        this.health = Math.min(2.0, this.health + 0.04);
       } else if (minDiff <= TIMING_WINDOWS.good) {
         rating = "GOOD"; pts = 200; this.hits.good++;
+        this.health = Math.min(2.0, this.health + 0.025);
       } else if (minDiff <= TIMING_WINDOWS.bad) {
         rating = "BAD"; pts = 100; this.hits.bad++;
       } else {
@@ -325,9 +350,11 @@ export class RhythmEngine {
       if (this.playerRole === 'bf') {
         this.bfPoseTimer = 0.3;
         this.bfPoseDir = lane;
+        this.targetCamX = 25; // Pan to BF
       } else {
         this.limesPoseTimer = 0.3;
         this.limesPoseDir = lane;
+        this.targetCamX = -25; // Pan to Limes
       }
 
       if (this.onNoteHitCallback) {
@@ -338,6 +365,7 @@ export class RhythmEngine {
         this.score = Math.max(0, this.score - 50);
         this.combo = 0;
         this.hits.miss++;
+        this.health = Math.max(0.05, this.health - 0.07);
         this.lastRating = "MISS";
 
         if (this.playerRole === 'bf') this.bfMissTimer = 0.3;
@@ -358,9 +386,11 @@ export class RhythmEngine {
     if (this.playerRole === 'bf') {
       this.limesPoseTimer = 0.3;
       this.limesPoseDir = lane;
+      this.targetCamX = -25; // Pan to Limes
     } else {
       this.bfPoseTimer = 0.3;
       this.bfPoseDir = lane;
+      this.targetCamX = 25; // Pan to BF
     }
 
     const targetIsPlayer = (this.playerRole !== 'bf');
@@ -409,11 +439,27 @@ export class RhythmEngine {
 
     const songTime = this.audio.getCurrentSongTime();
 
+    // 1. Camera Beat Bop (Pulse on every beat)
+    if (this.bpm > 0) {
+      const currentBeat = Math.floor(songTime * (this.bpm / 60));
+      if (currentBeat !== this.lastBeat && currentBeat >= 0) {
+        this.lastBeat = currentBeat;
+        this.camZoom = 1.03; // Punchy 3% zoom bounce
+      }
+    }
+    // Smoothly settle zoom back to 1.0x
+    this.camZoom += (1.0 - this.camZoom) * 10 * dt;
+
+    // Smooth camera pan toward current singer
+    this.camX += (this.targetCamX - this.camX) * 4 * dt;
+
+    // 2. Song Complete Check
     if (this.spawnIndex >= this.chartNotes.length && songTime > (this.chartNotes[this.chartNotes.length - 1].time + 2.0)) {
       this.state = 'FINISHED';
       return;
     }
 
+    // 3. Spawn Notes
     const spawnWindow = 3.2 / this.speed;
     while (this.spawnIndex < this.chartNotes.length) {
       const data = this.chartNotes[this.spawnIndex];
@@ -438,7 +484,7 @@ export class RhythmEngine {
       const isBotNote = (note.isPlayer !== humanIsPlayer);
       const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
-      // Active Hold Logic
+      // Sustain Hold Logic
       if (note.isHolding) {
         if (!isBotNote) {
           if (this.keysHeld[note.lane]) {
@@ -472,19 +518,20 @@ export class RhythmEngine {
         if (note.sustainLength > 0) {
           note.isHolding = true;
         } else {
-          if (note.isPlayer) { this.bfPoseTimer = 0.3; this.bfPoseDir = note.lane; }
-          else { this.limesPoseTimer = 0.3; this.limesPoseDir = note.lane; }
+          if (note.isPlayer) { this.bfPoseTimer = 0.3; this.bfPoseDir = note.lane; this.targetCamX = 25; }
+          else { this.limesPoseTimer = 0.3; this.limesPoseDir = note.lane; this.targetCamX = -25; }
           this.opponentKeyTimers[note.lane] = 0.15;
           note.kill();
         }
       }
 
-      // Human Miss Check
+      // Human Miss
       if (!isBotNote && !note.hit && (songTime - note.strumTime) > TIMING_WINDOWS.shit) {
         note.missed = true;
         note.kill();
         this.combo = 0;
         this.hits.miss++;
+        this.health = Math.max(0.05, this.health - 0.08);
         this.score = Math.max(0, this.score - 100);
         this.lastRating = "MISS";
         if (humanIsPlayer) this.bfMissTimer = 0.3;
@@ -508,7 +555,16 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // 1. Stage Background
+    // ==========================================
+    // LAYER 1: STAGE & CHARACTERS (CAMERA ZOOM & PAN)
+    // ==========================================
+    ctx.save();
+    // Center-point zoom and horizontal camera pan
+    ctx.translate(this.width / 2 + this.camX, this.height / 2);
+    ctx.scale(this.camZoom, this.camZoom);
+    ctx.translate(-this.width / 2, -this.height / 2);
+
+    // 1A. Stage Background
     if (this.hasBg) {
       ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -518,23 +574,31 @@ export class RhythmEngine {
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
+    // 1B. Characters (Grounded, animated, responsive)
+    this.renderCharacters(ctx);
+
+    ctx.restore(); // END CAMERA TRANSFORM
+    // (Everything below this line stays perfectly static on the screen!)
+
     if (this.state === 'LOADING' || this.state === 'ERROR') {
       this.renderLoadingScreen(ctx);
       return;
     }
 
-    // 2. Characters (Grounded behind notes)
-    this.renderCharacters(ctx);
-
-    // 3. Mobile Touch Hitboxes (Respects Mobile Controls Setting)
+    // ==========================================
+    // LAYER 2: MOBILE TOUCH HITBOXES
+    // ==========================================
     if (this.shouldShowMobileUI()) {
       this.renderTouchHitboxes(ctx);
     }
 
+    // ==========================================
+    // LAYER 3: RECEPTORS & RISING NOTES
+    // ==========================================
     const oppBaseX = 80;
     const playerBaseX = 460;
 
-    // 4. Receptors
+    // Draw Receptors
     for (let i = 0; i < 4; i++) {
       const isLimesHuman = (this.playerRole === 'limes');
       const isBfHuman = (this.playerRole === 'bf');
@@ -546,7 +610,7 @@ export class RhythmEngine {
       this.drawArrow(ctx, playerBaseX + i * this.laneWidth, this.receptorY, i, true, bfActive);
     }
 
-    // 5. Notes with Hold Trails
+    // Draw Notes with Hold Trails
     this.pool.forEachActive(note => {
       const baseX = note.isPlayer ? playerBaseX : oppBaseX;
       const x = baseX + (note.lane * this.laneWidth);
@@ -579,13 +643,18 @@ export class RhythmEngine {
       }
     });
 
-    // 6. HUD
+    // ==========================================
+    // LAYER 4: TOP TIME BAR & BOTTOM VS HEALTH BAR
+    // ==========================================
+    this.renderTopTimeBar(ctx);
+    this.renderBottomHealthBar(ctx);
     this.renderHUD(ctx);
 
     if (this.creditCardTimer > 0) {
       this.renderSongCreditsCard(ctx);
     }
 
+    // Countdown Overlay
     if (this.state === 'COUNTDOWN') {
       ctx.save();
       ctx.font = 'bold 82px sans-serif';
@@ -596,6 +665,106 @@ export class RhythmEngine {
       ctx.fillText(this.countdownText, this.width / 2, this.height / 2);
       ctx.restore();
     }
+  }
+
+  /**
+   * Psych Engine Style Song Completion Time Bar (Top of screen)
+   */
+  renderTopTimeBar(ctx) {
+    const songTime = this.audio.getCurrentSongTime();
+    const pct = Math.min(1, Math.max(0, songTime / (this.totalSongDuration || 1)));
+
+    const barW = 380;
+    const barH = 11;
+    const barX = (this.width - barW) / 2;
+    const barY = 18;
+
+    ctx.save();
+    // Background track
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(barX, barY, barW, barH);
+
+    // Progress fill
+    ctx.fillStyle = this.currentSong.color || '#55E840';
+    ctx.fillRect(barX + 2, barY + 2, (barW - 4) * pct, barH - 4);
+
+    // Border
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // Time text formatted (e.g. "1:24 / 2:38")
+    const formatTime = (secs) => {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${this.currentSong.name} (${formatTime(songTime)} / ${formatTime(this.totalSongDuration)})`, this.width / 2, barY + 23);
+    ctx.restore();
+  }
+
+  /**
+   * Classic FNF VS Tug-of-War Health Bar (Bottom of screen)
+   */
+  renderBottomHealthBar(ctx) {
+    const barW = 380;
+    const barH = 12;
+    const barX = (this.width - barW) / 2;
+    const barY = this.height - 48;
+
+    // Normalizes health: 0.0 (Limes) to 2.0 (BF)
+    // Percentage for player side:
+    const playerPct = Math.min(1, Math.max(0, this.health / 2.0));
+    const splitX = barX + (barW * (1 - playerPct));
+
+    ctx.save();
+    // Left side: Limes / Opponent Color (Green)
+    ctx.fillStyle = '#55E840';
+    ctx.fillRect(barX, barY, barW, barH);
+
+    // Right side: Boyfriend Color (Cyan/Blue)
+    ctx.fillStyle = '#38A8FF';
+    ctx.fillRect(splitX, barY, (barX + barW) - splitX, barH);
+
+    // Outer Border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // Center Divider Peg
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(splitX - 3, barY - 2, 6, barH + 4);
+    ctx.restore();
+  }
+
+  renderHUD(ctx) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+
+    const hudY = this.height - 18; // Cleanly placed at the absolute bottom!
+
+    if (this.gameMode === 'multiplayer') {
+      const youLead = this.score >= this.opponentScore;
+      ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
+      const hudText = `YOU: ${this.score} (${this.accuracy}%)  vs  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
+      ctx.fillText(hudText, this.width / 2, hudY);
+    } else {
+      const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
+      ctx.fillText(statsText, this.width / 2, hudY);
+    }
+
+    // Rating Popup (SICK / GOOD / BAD / MISS)
+    if (this.lastRating) {
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillStyle = this.lastRating === 'MISS' ? '#FF3333' : '#FFDD00';
+      ctx.fillText(this.lastRating, this.width / 2, 230);
+    }
+    ctx.textAlign = 'left';
   }
 
   drawCharacter(ctx, x, groundY, skin, poseDir, poseTimer, missTimer, tauntTimer, fallbackColor, label, shouldMirror) {
@@ -615,6 +784,7 @@ export class RhythmEngine {
     else if (skin.idle) activeImg = skin.idle;
 
     if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
+      // Fit-to-Frame Scaling & Ground Anchoring
       const maxW = 160;
       const maxH = 200;
       const scale = Math.min(maxW / activeImg.naturalWidth, maxH / activeImg.naturalHeight);
@@ -623,6 +793,7 @@ export class RhythmEngine {
 
       ctx.drawImage(activeImg, -w / 2, -h, w, h);
     } else {
+      // Fallback Box
       const boxW = 100;
       const boxH = 140;
       ctx.globalAlpha = 0.85;
@@ -656,7 +827,7 @@ export class RhythmEngine {
       this.mirrorSprite
     );
 
-    // RIGHT: Boyfriend
+    // RIGHT: Boyfriend (Mirrored by default so BF looks Left!)
     this.drawCharacter(
       ctx, 580, groundY, bfSkin,
       this.bfPoseDir, this.bfPoseTimer, this.bfMissTimer, this.bfTauntTimer,
@@ -752,27 +923,6 @@ export class RhythmEngine {
       ctx.stroke();
     }
     ctx.restore();
-  }
-
-  renderHUD(ctx) {
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 15px monospace';
-
-    if (this.gameMode === 'multiplayer') {
-      const youLead = this.score >= this.opponentScore;
-      ctx.fillStyle = youLead ? '#55E840' : '#FF5555';
-      const hudText = `YOU: ${this.score} (${this.accuracy}%)  VS  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
-      ctx.fillText(hudText, 110, this.height - 180);
-    } else {
-      const statsText = `Score: ${this.score} | Combo: ${this.combo} (Max: ${this.highestCombo}) | Acc: ${this.accuracy}%`;
-      ctx.fillText(statsText, 140, this.height - 180);
-    }
-
-    if (this.lastRating) {
-      ctx.font = 'bold 24px sans-serif';
-      ctx.fillStyle = this.lastRating === 'MISS' ? '#FF3333' : '#FFDD00';
-      ctx.fillText(this.lastRating, 340, 240);
-    }
   }
 
   renderLoadingScreen(ctx) {
