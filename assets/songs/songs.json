@@ -48,5 +48,45 @@
     "color": "#00CC66",
     "bpm": 145,
     "difficulty": "Hard"
+  },
+  {
+    "id": "delusion",
+    "name": "Delusion",
+    "artist": "Punkett",
+    "folder": "delusion",
+    "chart": "normal.json",
+    "color": "#7A1C28",
+    "bpm": 160,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "room-code",
+    "name": "Room Code",
+    "artist": "Rareblin",
+    "folder": "room-code",
+    "chart": "normal.json",
+    "color": "#7D8C99",
+    "bpm": 135,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "idk",
+    "name": "IDK",
+    "artist": "Rareblin",
+    "folder": "idk",
+    "chart": "normal.json",
+    "color": "#B4B4B4",
+    "bpm": 155,
+    "difficulty": "Hard"
+  },
+  {
+    "id": "victory",
+    "name": "Victory",
+    "artist": "Ethan & Rareblin",
+    "folder": "victory",
+    "chart": "normal.json",
+    "color": "#FFD700",
+    "bpm": 150,
+    "difficulty": "Hard"
   }
 ]
