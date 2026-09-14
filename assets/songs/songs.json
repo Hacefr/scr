@@ -88,5 +88,15 @@
     "color": "#FFD700",
     "bpm": 150,
     "difficulty": "Hard"
+  },
+  {
+    "id": "test",
+    "name": "Test",
+    "artist": "KSI",
+    "folder": "test",
+    "chart": "normal.json",
+    "color": "#fffffff",
+    "bpm": 150,
+    "difficulty": "Nebraska"
   }
 ]
