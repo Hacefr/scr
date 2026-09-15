@@ -219,62 +219,106 @@ h2 {
   transform: scale(1.05);
 }
 
-/* Individual Skin Slots */
+/* ===================================================
+   EXPANDABLE POSE DRAWERS & 4-FRAME SUB-SLOTS
+   =================================================== */
 .skin-slots-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-height: 290px;
   overflow-y: auto;
-  width: 380px;
+  width: 400px;
   padding: 4px 6px;
 }
 
-.skin-slot-row {
+.skin-drawer-card {
+  background: rgba(24, 27, 34, 0.9);
+  border: 1px solid #363c4a;
+  border-radius: 5px;
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.skin-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(24, 27, 34, 0.9);
-  border: 1px solid #363c4a;
-  border-radius: 4px;
-  padding: 6px 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #14171d;
 }
 
-.skin-slot-label {
-  font-size: 12px;
+.skin-drawer-header:hover {
+  background: #1e222b;
+}
+
+.skin-drawer-title {
+  font-size: 13px;
   font-weight: bold;
-  color: #fff;
-  width: 100px;
+  color: #FDE871;
 }
 
-.skin-slot-status {
+.skin-drawer-count {
   font-size: 11px;
+  color: #aaa;
+}
+
+.skin-drawer-content {
+  display: none;
+  padding: 8px 10px;
+  background: rgba(10, 12, 16, 0.95);
+  border-top: 1px solid #22252e;
+  gap: 6px;
+  flex-direction: column;
+}
+
+.skin-drawer-card.open .skin-drawer-content {
+  display: flex;
+}
+
+.frame-slot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #181b22;
+  border: 1px solid #282d38;
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+
+.frame-slot-label {
+  font-size: 11px;
+  color: #ddd;
+}
+
+.frame-slot-status {
+  font-size: 10px;
   font-weight: bold;
   color: #777;
-  margin-right: 8px;
+  margin-right: 6px;
 }
 
-.skin-slot-input {
+.frame-slot-input {
   display: none;
 }
 
-.skin-slot-btn {
+.frame-slot-btn {
   background: #101216;
   color: #FDE871;
   border: 1px solid #FDE871;
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: 3px 8px;
+  font-size: 10px;
   cursor: pointer;
   border-radius: 3px;
-  transition: all 0.1s ease;
 }
 
-.skin-slot-btn:hover {
+.frame-slot-btn:hover {
   background: #FDE871;
   color: #000;
 }
 
-/* Song List */
+/* Freeplay Song Cards */
 .song-list-container {
   display: flex;
   flex-direction: column;
