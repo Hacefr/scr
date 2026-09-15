@@ -48,80 +48,19 @@
       <button id="btn-to-settings" class="btn" style="border-color:#555; color:#aaa;">⚙️ SETTINGS</button>
     </div>
 
-    <!-- 2. CUSTOM SKIN UPLOADER (WITH 3 SLOTS) -->
+    <!-- 2. CUSTOM SKIN UPLOADER (WITH 4-FRAME DRAWERS) -->
     <div id="menu-skins" class="overlay hidden">
       <h2>CUSTOM SKIN SLOTS</h2>
       
+      <!-- 3 Skin Slot Buttons -->
       <div style="display:flex; gap:8px; margin-bottom:4px;">
         <button id="btn-slot-1" class="btn slot-btn active">SLOT 1</button>
         <button id="btn-slot-2" class="btn slot-btn">SLOT 2</button>
         <button id="btn-slot-3" class="btn slot-btn">SLOT 3</button>
       </div>
       
-      <div class="skin-slots-container">
-        <div class="skin-slot-row">
-          <span class="skin-slot-label">IDLE POSE:</span>
-          <div>
-            <span id="status-idle" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-idle" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label">LEFT POSE:</span>
-          <div>
-            <span id="status-left" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-left" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label">DOWN POSE:</span>
-          <div>
-            <span id="status-down" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-down" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label">UP POSE:</span>
-          <div>
-            <span id="status-up" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-up" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label">RIGHT POSE:</span>
-          <div>
-            <span id="status-right" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-right" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label" style="color:#ff7575;">MISS POSE:</span>
-          <div>
-            <span id="status-miss" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-miss" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label" style="color:#FDE871;">TAUNT POSE:</span>
-          <div>
-            <span id="status-taunt" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-taunt" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
-
-        <div class="skin-slot-row">
-          <span class="skin-slot-label" style="color:#55e840;">BAR ICON:</span>
-          <div>
-            <span id="status-icon" class="skin-slot-status">DEFAULT</span>
-            <label class="skin-slot-btn">CHOOSE PNG<input type="file" id="slot-icon" class="skin-slot-input" accept="image/png"></label>
-          </div>
-        </div>
+      <div id="skin-drawers-list" class="skin-slots-container">
+        <!-- Dynamically generated 4-frame expandable drawers for each pose -->
       </div>
 
       <div style="display:flex; gap:10px; margin-top:6px;">
@@ -130,14 +69,13 @@
       </div>
     </div>
 
-    <!-- 3. SETTINGS MENU -->
+    <!-- 3. SETTINGS MENU (WITH KEY BOUNCE & ANIMATED POSES) -->
     <div id="menu-settings" class="overlay hidden">
       <h2>SETTINGS</h2>
       <button id="btn-toggle-ghost" class="btn">GHOST TAPPING: ON</button>
-      <button id="btn-toggle-mobile-mode" class="btn" style="border-color:#FDE871; color:#FDE871;">MOBILE CONTROLS: AUTO</button>
-      <p style="font-size:12px; color:#888; max-width:300px; text-align:center;">
-        AUTO: Enabled on touchscreens.<br>ON: Force touch buttons.<br>OFF: Pure keyboard mode.
-      </p>
+      <button id="btn-toggle-key-bounce" class="btn" style="border-color:#FDE871; color:#FDE871;">KEY BOUNCE: ON</button>
+      <button id="btn-toggle-animated-poses" class="btn" style="border-color:#55e840; color:#55e840;">ANIMATED POSES: ON</button>
+      <button id="btn-toggle-mobile-mode" class="btn" style="border-color:#45f3ff; color:#45f3ff;">MOBILE CONTROLS: AUTO</button>
       <button id="btn-settings-back" class="btn" style="border-color:#555; color:#888; margin-top:6px;">BACK</button>
     </div>
 
@@ -173,7 +111,6 @@
         <p id="lobby-status-text" style="color:#aaa; text-align:center; white-space:pre-line; font-size:13px;">Waiting for opponent...</p>
         <p id="lobby-preload-status" style="color:#55e840; font-size:12px; font-weight:bold;">Track Ready ✓</p>
         
-        <!-- Live Ping Display in Lobby -->
         <p id="lobby-ping-display" style="font-size:11px; color:#888; margin: 2px 0;">PING: -- | OPPONENT: --</p>
         
         <div style="display:flex; align-items:center; gap:8px;">
@@ -189,7 +126,7 @@
       <button id="btn-multi-back" class="btn" style="border-color:#555; color:#888; margin-top:5px;">BACK</button>
     </div>
 
-    <!-- 7. MATCH RESULTS -->
+    <!-- 7. MATCH RESULTS (NEVER BLANK) -->
     <div id="menu-results" class="overlay hidden">
       <h1 id="results-title">MATCH FINISHED</h1>
       <div id="results-body" style="font-size: 16px; text-align: center; line-height: 1.8;"></div>
@@ -207,8 +144,18 @@
     const engine = new RhythmEngine(canvas);
     const network = new NetworkManager();
 
-    // 1. Skin Slots Storage (Defined first to prevent TDZ ReferenceError)
-    const SLOTS = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
+    // 1. POSE SPECIFICATION (4 Frames per Pose)
+    const POSES_CONFIG = [
+      { id: 'idle', label: 'IDLE POSE', frames: 4 },
+      { id: 'left', label: 'LEFT POSE', frames: 4 },
+      { id: 'down', label: 'DOWN POSE', frames: 4 },
+      { id: 'up', label: 'UP POSE', frames: 4 },
+      { id: 'right', label: 'RIGHT POSE', frames: 4 },
+      { id: 'miss', label: 'MISS POSE', frames: 4 },
+      { id: 'taunt', label: 'TAUNT POSE', frames: 4 },
+      { id: 'icon', label: 'BAR ICON', frames: 1 } // Single icon
+    ];
+
     let currentSlot = parseInt(localStorage.getItem('equippedSkinSlot') || '1');
     
     function getSlotData(slotNum) {
@@ -221,23 +168,15 @@
 
     let activeSkinData = getSlotData(currentSlot);
 
-    function updateSkinSlotStatuses() {
-      SLOTS.forEach(slot => {
-        const statusEl = document.getElementById(`status-${slot}`);
-        if (statusEl) {
-          if (activeSkinData && activeSkinData[slot]) {
-            statusEl.innerText = "CUSTOM ✓";
-            statusEl.style.color = "#55e840";
-          } else {
-            statusEl.innerText = "DEFAULT";
-            statusEl.style.color = "#777";
-          }
-        }
-      });
-    }
-
+    // Settings Persistence
     let userGhostTapping = localStorage.getItem('ghostTapping') !== 'false';
     engine.ghostTapping = userGhostTapping;
+
+    let userKeyBounce = localStorage.getItem('keyBounce') !== 'false';
+    engine.keyBounce = userKeyBounce;
+
+    let userAnimatedPoses = localStorage.getItem('animatedPoses') !== 'false';
+    engine.animatedPoses = userAnimatedPoses;
 
     let userMobileMode = localStorage.getItem('mobileControlsMode') || 'auto';
     engine.mobileControlsMode = userMobileMode;
@@ -270,6 +209,8 @@
     const songLoadError = document.getElementById('song-load-error');
 
     const btnToggleGhost = document.getElementById('btn-toggle-ghost');
+    const btnToggleKeyBounce = document.getElementById('btn-toggle-key-bounce');
+    const btnToggleAnimatedPoses = document.getElementById('btn-toggle-animated-poses');
     const btnToggleMobileMode = document.getElementById('btn-toggle-mobile-mode');
     const btnLobbyGhost = document.getElementById('btn-lobby-ghost');
     const btnReady = document.getElementById('btn-ready');
@@ -284,6 +225,110 @@
       document.getElementById('btn-slot-3')
     ];
 
+    // ==========================================
+    // 4-FRAME EXPANDABLE DRAWERS BUILDER
+    // ==========================================
+    const drawersListEl = document.getElementById('skin-drawers-list');
+
+    function buildSkinDrawersUI() {
+      drawersListEl.innerHTML = '';
+
+      POSES_CONFIG.forEach(pose => {
+        const drawerCard = document.createElement('div');
+        drawerCard.className = 'skin-drawer-card';
+
+        // Header (Click to toggle open/close)
+        const header = document.createElement('div');
+        header.className = 'skin-drawer-header';
+        header.innerHTML = `
+          <span class="skin-drawer-title">${pose.label}</span>
+          <span id="drawer-count-${pose.id}" class="skin-drawer-count">DEFAULT ▼</span>
+        `;
+        header.onclick = () => {
+          drawerCard.classList.toggle('open');
+        };
+
+        // Content (Frame slots)
+        const content = document.createElement('div');
+        content.className = 'skin-drawer-content';
+
+        for (let f = 1; f <= pose.frames; f++) {
+          const row = document.createElement('div');
+          row.className = 'frame-slot-row';
+          const labelText = pose.frames === 1 ? 'ICON IMAGE' : `FRAME ${f} ${f === 1 ? '(MAIN)' : ''}`;
+
+          row.innerHTML = `
+            <span class="frame-slot-label">${labelText}</span>
+            <div>
+              <span id="status-${pose.id}-${f}" class="frame-slot-status">EMPTY</span>
+              <label class="frame-slot-btn">CHOOSE PNG<input type="file" id="slot-${pose.id}-${f}" class="frame-slot-input" accept="image/png"></label>
+            </div>
+          `;
+
+          const fileInput = row.querySelector(`#slot-${pose.id}-${f}`);
+          fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const base64 = event.target.result;
+              if (pose.id === 'icon') {
+                activeSkinData.icon = base64;
+              } else {
+                if (!Array.isArray(activeSkinData[pose.id])) {
+                  activeSkinData[pose.id] = [];
+                }
+                activeSkinData[pose.id][f - 1] = base64;
+              }
+
+              saveSlotData(currentSlot, activeSkinData);
+              engine.setSkin('local', activeSkinData);
+              updateDrawerStatuses();
+            };
+            reader.readAsDataURL(file);
+          };
+
+          content.appendChild(row);
+        }
+
+        drawerCard.appendChild(header);
+        drawerCard.appendChild(content);
+        drawersListEl.appendChild(drawerCard);
+      });
+
+      updateDrawerStatuses();
+    }
+
+    function updateDrawerStatuses() {
+      POSES_CONFIG.forEach(pose => {
+        let uploadedFrames = 0;
+        if (pose.id === 'icon') {
+          const hasIcon = !!activeSkinData.icon;
+          const statusEl = document.getElementById(`status-icon-1`);
+          const countEl = document.getElementById(`drawer-count-icon`);
+          if (statusEl) statusEl.innerText = hasIcon ? 'SET ✓' : 'EMPTY';
+          if (countEl) countEl.innerText = hasIcon ? 'SET ✓ ▼' : 'DEFAULT ▼';
+        } else {
+          const frameArr = activeSkinData[pose.id] || [];
+          for (let f = 1; f <= pose.frames; f++) {
+            const statusEl = document.getElementById(`status-${pose.id}-${f}`);
+            if (statusEl) {
+              const isSet = !!frameArr[f - 1];
+              statusEl.innerText = isSet ? 'SET ✓' : 'EMPTY';
+              statusEl.style.color = isSet ? '#55e840' : '#777';
+              if (isSet) uploadedFrames++;
+            }
+          }
+          const countEl = document.getElementById(`drawer-count-${pose.id}`);
+          if (countEl) {
+            countEl.innerText = uploadedFrames > 0 ? `(${uploadedFrames}/${pose.frames} FRAMES) ▼` : 'DEFAULT ▼';
+            countEl.style.color = uploadedFrames > 0 ? '#FDE871' : '#aaa';
+          }
+        }
+      });
+    }
+
     function selectSlot(slotNum) {
       currentSlot = slotNum;
       localStorage.setItem('equippedSkinSlot', slotNum.toString());
@@ -296,78 +341,71 @@
       });
 
       activeSkinData = getSlotData(slotNum);
-      engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null };
+      engine.customSkins.local = { idle: [], left: [], down: [], up: [], right: [], miss: [], taunt: [], icon: null };
       if (Object.keys(activeSkinData).length > 0) {
         engine.setSkin('local', activeSkinData);
       }
-      updateSkinSlotStatuses();
+      updateDrawerStatuses();
     }
 
     slotButtons[0].onclick = () => selectSlot(1);
     slotButtons[1].onclick = () => selectSlot(2);
     slotButtons[2].onclick = () => selectSlot(3);
+    buildSkinDrawersUI();
     selectSlot(currentSlot);
 
-    function updateMobileButtonVisibility() {
-      if (engine.shouldShowMobileUI()) {
-        btnMobileTaunt.style.display = 'flex';
-      } else {
-        btnMobileTaunt.style.display = 'none';
-      }
-    }
-    updateMobileButtonVisibility();
+    document.getElementById('btn-clear-skins').onclick = () => {
+      activeSkinData = {};
+      saveSlotData(currentSlot, activeSkinData);
+      engine.customSkins.local = { idle: [], left: [], down: [], up: [], right: [], miss: [], taunt: [], icon: null };
+      updateDrawerStatuses();
+    };
 
-    function updateMobileModeUI() {
+    // Settings Button Handlers
+    function updateSettingsUI() {
+      btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
+      btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
+      btnToggleGhost.style.borderColor = engine.ghostTapping ? "#55e840" : "#ff5555";
+
+      btnToggleKeyBounce.innerText = `KEY BOUNCE: ${engine.keyBounce ? "ON" : "OFF"}`;
+      btnToggleKeyBounce.style.color = engine.keyBounce ? "#FDE871" : "#888";
+      btnToggleKeyBounce.style.borderColor = engine.keyBounce ? "#FDE871" : "#555";
+
+      btnToggleAnimatedPoses.innerText = `ANIMATED POSES: ${engine.animatedPoses ? "ON" : "OFF"}`;
+      btnToggleAnimatedPoses.style.color = engine.animatedPoses ? "#55e840" : "#888";
+      btnToggleAnimatedPoses.style.borderColor = engine.animatedPoses ? "#55e840" : "#555";
+
       btnToggleMobileMode.innerText = `MOBILE CONTROLS: ${engine.mobileControlsMode.toUpperCase()}`;
-      updateMobileButtonVisibility();
+
+      if (engine.shouldShowMobileUI()) btnMobileTaunt.style.display = 'flex';
+      else btnMobileTaunt.style.display = 'none';
     }
-    updateMobileModeUI();
+    updateSettingsUI();
+
+    btnToggleGhost.onclick = () => {
+      engine.ghostTapping = !engine.ghostTapping;
+      localStorage.setItem('ghostTapping', engine.ghostTapping);
+      updateSettingsUI();
+    };
+
+    btnToggleKeyBounce.onclick = () => {
+      engine.keyBounce = !engine.keyBounce;
+      localStorage.setItem('keyBounce', engine.keyBounce);
+      updateSettingsUI();
+    };
+
+    btnToggleAnimatedPoses.onclick = () => {
+      engine.animatedPoses = !engine.animatedPoses;
+      localStorage.setItem('animatedPoses', engine.animatedPoses);
+      updateSettingsUI();
+    };
 
     btnToggleMobileMode.onclick = () => {
       const modes = ['auto', 'on', 'off'];
       const nextIdx = (modes.indexOf(engine.mobileControlsMode) + 1) % modes.length;
       engine.mobileControlsMode = modes[nextIdx];
       localStorage.setItem('mobileControlsMode', engine.mobileControlsMode);
-      updateMobileModeUI();
-    };
-
-    function updateGhostButtonUI() {
-      btnToggleGhost.innerText = `GHOST TAPPING: ${engine.ghostTapping ? "ON" : "OFF"}`;
-      btnToggleGhost.style.color = engine.ghostTapping ? "#55e840" : "#ff5555";
-      btnToggleGhost.style.borderColor = engine.ghostTapping ? "#55e840" : "#ff5555";
-    }
-    updateGhostButtonUI();
-
-    btnToggleGhost.onclick = () => {
-      engine.ghostTapping = !engine.ghostTapping;
-      localStorage.setItem('ghostTapping', engine.ghostTapping);
-      updateGhostButtonUI();
-    };
-
-    SLOTS.forEach(slot => {
-      const input = document.getElementById(`slot-${slot}`);
-      if (input) {
-        input.onchange = (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            activeSkinData[slot] = event.target.result;
-            saveSlotData(currentSlot, activeSkinData);
-            engine.setSkin('local', activeSkinData);
-            updateSkinSlotStatuses();
-          };
-          reader.readAsDataURL(file);
-        };
-      }
-    });
-
-    document.getElementById('btn-clear-skins').onclick = () => {
-      activeSkinData = {};
-      saveSlotData(currentSlot, activeSkinData);
-      engine.customSkins.local = { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null };
-      updateSkinSlotStatuses();
+      updateSettingsUI();
     };
 
     // 0. Intro Splash Sequence
@@ -627,7 +665,6 @@
       network.updateRoomSettings({ ghostTapping: !current });
     };
 
-    // Live Ping Sync to Engine & UI
     setInterval(() => {
       engine.localPing = network.localPing;
       engine.opponentPing = network.opponentPing;
@@ -698,7 +735,6 @@
       }
     };
 
-    // Two-Phase Handshake with 5-Burst NTP
     network.onHandshakeCheck = async () => {
       lobbyPreloadStatus.innerText = "CALIBRATING CLOCKS & SYNCING...";
       lobbyPreloadStatus.style.color = "#FFAA00";
