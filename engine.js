@@ -2,15 +2,15 @@
  * engine.js
  * Core Canvas Rhythm Game Engine
  * Features:
+ * - 4-Frame Per-Pose Animation Stepper (Singing actions & Idle dance)
+ * - Tactile "Key Bounce" impact physics (squash & stretch)
+ * - Animated Poses & Key Bounce performance toggles
  * - Top Song Progress & Time Bar
  * - Bottom VS Tug-of-War Health Bar with Animated Bouncing Icons
- * - Corrected Camera Pan (faces active singer) & Rhythmic Beat Bop
+ * - Corrected Camera Pan & Rhythmic Beat Bop
  * - Hold / Sustain Notes with Trails & Continuous Scoring
- * - Live Ping Display (Local & Opponent) on HUD
+ * - Live Ping Display on HUD
  * - Clean Menu Rendering (No ghost gameplay in menus)
- * - Taunt Mechanic (Key T / Mobile Yellow Button) & Miss Poses
- * - Fit-To-Frame Scaling & Ground Floor Anchoring
- * - Dynamic Multi-Song loader with custom bg.png
  */
 
 import { AudioManager } from './audio.js';
@@ -53,23 +53,28 @@ export class RhythmEngine {
     this.spawnIndex = 0;
     this.totalSongDuration = 120;
 
-    // Camera Beat Bop & Pan States
+    // Camera Beat Bop & Pan
     this.camZoom = 1.0;
     this.camX = 0;
     this.targetCamX = 0;
     this.lastBeat = -1;
 
-    // Tug-of-War Health (0.05 to 1.95)
+    // Key Bounce & Character Recoil
+    this.keyBounce = true;
+    this.animatedPoses = true;
+    this.bfBounceScale = 1.0;
+    this.limesBounceScale = 1.0;
+
     this.health = 1.0;
 
-    // Stage Background
     this.stageBg = new Image();
     this.hasBg = false;
 
-    // Custom Skins Store
+    // Custom 4-Frame Skin Stores
+    // Each pose slot can hold an array of up to 4 Image objects: [frame1, frame2, frame3, frame4]
     this.customSkins = {
-      local: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null },
-      opponent: { idle: null, left: null, down: null, up: null, right: null, miss: null, taunt: null, icon: null }
+      local: { idle: [], left: [], down: [], up: [], right: [], miss: [], taunt: [], icon: null },
+      opponent: { idle: [], left: [], down: [], up: [], right: [], miss: [], taunt: [], icon: null }
     };
 
     this.currentSong = { name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" };
@@ -142,16 +147,38 @@ export class RhythmEngine {
     return this.isTouchDevice;
   }
 
+  /**
+   * Accepts both multi-frame arrays and single image strings per pose
+   */
   setSkin(target, skinData) {
     if (!skinData) return;
-    const poses = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt', 'icon'];
+    const poses = ['idle', 'left', 'down', 'up', 'right', 'miss', 'taunt'];
+    
     poses.forEach(pose => {
-      if (skinData[pose]) {
+      this.customSkins[target][pose] = [];
+      const data = skinData[pose];
+      if (Array.isArray(data)) {
+        // Multi-frame array [f1, f2, f3, f4]
+        data.forEach(src => {
+          if (src) {
+            const img = new Image();
+            img.src = src;
+            this.customSkins[target][pose].push(img);
+          }
+        });
+      } else if (typeof data === 'string' && data.length > 0) {
+        // Single frame fallback
         const img = new Image();
-        img.src = skinData[pose];
-        this.customSkins[target][pose] = img;
+        img.src = data;
+        this.customSkins[target][pose].push(img);
       }
     });
+
+    if (skinData.icon) {
+      const iconImg = new Image();
+      iconImg.src = skinData.icon;
+      this.customSkins[target].icon = iconImg;
+    }
   }
 
   setupInputs() {
@@ -232,8 +259,13 @@ export class RhythmEngine {
   }
 
   triggerTaunt() {
-    if (this.playerRole === 'bf') this.bfTauntTimer = 0.4;
-    else this.limesTauntTimer = 0.4;
+    if (this.playerRole === 'bf') {
+      this.bfTauntTimer = 0.4;
+      if (this.keyBounce) this.bfBounceScale = 1.15;
+    } else {
+      this.limesTauntTimer = 0.4;
+      if (this.keyBounce) this.limesBounceScale = 1.15;
+    }
 
     if (this.onTauntCallback) {
       this.onTauntCallback({ role: this.playerRole });
@@ -241,8 +273,13 @@ export class RhythmEngine {
   }
 
   handleOpponentTaunt(data) {
-    if (data.role === 'bf') this.bfTauntTimer = 0.4;
-    else this.limesTauntTimer = 0.4;
+    if (data.role === 'bf') {
+      this.bfTauntTimer = 0.4;
+      if (this.keyBounce) this.bfBounceScale = 1.15;
+    } else {
+      this.limesTauntTimer = 0.4;
+      if (this.keyBounce) this.limesBounceScale = 1.15;
+    }
   }
 
   async loadAssets(songData = { folder: "stargazer", name: "Stargazer", artist: "VS Impostor Legacy", color: "#55E840" }) {
@@ -289,6 +326,8 @@ export class RhythmEngine {
       this.lastBeat = -1;
       this.camX = 0;
       this.targetCamX = 0;
+      this.bfBounceScale = 1.0;
+      this.limesBounceScale = 1.0;
 
       this.state = 'READY';
       this.loadingStatus = "Ready!";
@@ -360,11 +399,14 @@ export class RhythmEngine {
       if (this.playerRole === 'bf') {
         this.bfPoseTimer = 0.3;
         this.bfPoseDir = lane;
-        this.targetCamX = 25; // Focus BF (Right side)
+        this.targetCamX = 25;
+        // Key Bounce Impact
+        if (this.keyBounce) this.bfBounceScale = 1.15;
       } else {
         this.limesPoseTimer = 0.3;
         this.limesPoseDir = lane;
-        this.targetCamX = -25; // Focus Limes (Left side)
+        this.targetCamX = -25;
+        if (this.keyBounce) this.limesBounceScale = 1.15;
       }
 
       if (this.onNoteHitCallback) {
@@ -397,10 +439,12 @@ export class RhythmEngine {
       this.limesPoseTimer = 0.3;
       this.limesPoseDir = lane;
       this.targetCamX = -25;
+      if (this.keyBounce) this.limesBounceScale = 1.15;
     } else {
       this.bfPoseTimer = 0.3;
       this.bfPoseDir = lane;
       this.targetCamX = 25;
+      if (this.keyBounce) this.bfBounceScale = 1.15;
     }
 
     const targetIsPlayer = (this.playerRole !== 'bf');
@@ -452,7 +496,7 @@ export class RhythmEngine {
 
     const songTime = this.audio.getCurrentSongTime();
 
-    // Camera Beat Bop (Rhythmic 3% punch on every beat)
+    // Camera Beat Bop
     if (this.bpm > 0) {
       const currentBeat = Math.floor(songTime * (this.bpm / 60));
       if (currentBeat !== this.lastBeat && currentBeat >= 0) {
@@ -463,7 +507,10 @@ export class RhythmEngine {
     this.camZoom += (1.0 - this.camZoom) * 10 * dt;
     this.camX += (this.targetCamX - this.camX) * 4 * dt;
 
-    // Song completion check
+    // Settle Key Bounce back to 1.0x
+    this.bfBounceScale += (1.0 - this.bfBounceScale) * 14 * dt;
+    this.limesBounceScale += (1.0 - this.limesBounceScale) * 14 * dt;
+
     if (this.spawnIndex >= this.chartNotes.length && songTime > (this.chartNotes[this.chartNotes.length - 1].time + 2.0)) {
       this.state = 'FINISHED';
       return;
@@ -493,7 +540,6 @@ export class RhythmEngine {
       const isBotNote = (note.isPlayer !== humanIsPlayer);
       const noteEndTime = note.strumTime + (note.sustainLength || 0);
 
-      // Sustain Hold Logic
       if (note.isHolding) {
         if (!isBotNote) {
           if (this.keysHeld[note.lane]) {
@@ -527,8 +573,13 @@ export class RhythmEngine {
         if (note.sustainLength > 0) {
           note.isHolding = true;
         } else {
-          if (note.isPlayer) { this.bfPoseTimer = 0.3; this.bfPoseDir = note.lane; this.targetCamX = 25; }
-          else { this.limesPoseTimer = 0.3; this.limesPoseDir = note.lane; this.targetCamX = -25; }
+          if (note.isPlayer) {
+            this.bfPoseTimer = 0.3; this.bfPoseDir = note.lane; this.targetCamX = 25;
+            if (this.keyBounce) this.bfBounceScale = 1.15;
+          } else {
+            this.limesPoseTimer = 0.3; this.limesPoseDir = note.lane; this.targetCamX = -25;
+            if (this.keyBounce) this.limesBounceScale = 1.15;
+          }
           this.opponentKeyTimers[note.lane] = 0.15;
           note.kill();
         }
@@ -564,7 +615,6 @@ export class RhythmEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // If on Menu or Boot: ONLY render clean background
     if (this.state !== 'PLAYING' && this.state !== 'COUNTDOWN') {
       if (this.hasBg) {
         ctx.drawImage(this.stageBg, 0, 0, this.width, this.height);
@@ -577,9 +627,7 @@ export class RhythmEngine {
       return;
     }
 
-    // ==========================================
-    // LAYER 1: STAGE (Correct negative translation camera)
-    // ==========================================
+    // 1. LAYER 1: STAGE (Camera Zoom & Pan)
     ctx.save();
     ctx.translate(this.width / 2 - this.camX, this.height / 2);
     ctx.scale(this.camZoom, this.camZoom);
@@ -597,16 +645,12 @@ export class RhythmEngine {
     this.renderCharacters(ctx);
     ctx.restore();
 
-    // ==========================================
-    // LAYER 2: MOBILE TOUCH HITBOXES
-    // ==========================================
+    // 2. LAYER 2: MOBILE TOUCH HITBOXES
     if (this.shouldShowMobileUI()) {
       this.renderTouchHitboxes(ctx);
     }
 
-    // ==========================================
-    // LAYER 3: RECEPTORS & NOTES
-    // ==========================================
+    // 3. LAYER 3: RECEPTORS & NOTES
     const oppBaseX = 80;
     const playerBaseX = 460;
 
@@ -653,9 +697,7 @@ export class RhythmEngine {
       }
     });
 
-    // ==========================================
-    // LAYER 4: TOP TIME BAR, BOTTOM TUG-OF-WAR & HUD
-    // ==========================================
+    // 4. LAYER 4: BARS & HUD
     this.renderTopTimeBar(ctx);
     this.renderBottomHealthBar(ctx);
     this.renderHUD(ctx);
@@ -782,7 +824,6 @@ export class RhythmEngine {
       const hudText = `YOU: ${this.score} (${this.accuracy}%)  vs  OPPONENT: ${this.opponentScore} (${this.opponentAccuracy}%)`;
       ctx.fillText(hudText, this.width / 2, hudY);
 
-      // Render Live Pings in Bottom Corners
       ctx.save();
       ctx.font = '11px monospace';
       ctx.fillStyle = '#888888';
@@ -804,7 +845,10 @@ export class RhythmEngine {
     ctx.textAlign = 'left';
   }
 
-  drawCharacter(ctx, x, groundY, skin, poseDir, poseTimer, missTimer, tauntTimer, fallbackColor, label, shouldMirror) {
+  /**
+   * Character Drawer: Supports 4-Frame Array Poses, Beat-Synced Idle & Key Bounce
+   */
+  drawCharacter(ctx, x, groundY, skin, poseDir, poseTimer, missTimer, tauntTimer, fallbackColor, label, shouldMirror, bounceScale) {
     ctx.save();
     ctx.translate(x, groundY);
 
@@ -812,23 +856,93 @@ export class RhythmEngine {
       ctx.scale(-1, 1);
     }
 
-    let activeImg = null;
+    // Apply Key Bounce impact scale
+    if (this.keyBounce && bounceScale && bounceScale > 1.0) {
+      ctx.scale(bounceScale, 1 / bounceScale); // Squash & stretch recoil!
+    }
+
+    // Determine active pose frame list
+    let activeFrames = [];
+    let isIdle = false;
+    let actionProgress = 0.0;
     const dirs = ['left', 'down', 'up', 'right'];
 
-    if (tauntTimer > 0 && skin.taunt) activeImg = skin.taunt;
-    else if (missTimer > 0 && skin.miss) activeImg = skin.miss;
-    else if (poseTimer > 0 && poseDir >= 0 && skin[dirs[poseDir]]) activeImg = skin[dirs[poseDir]];
-    else if (skin.idle) activeImg = skin.idle;
+    if (tauntTimer > 0 && skin.taunt && skin.taunt.length > 0) {
+      activeFrames = skin.taunt;
+      actionProgress = 1.0 - (tauntTimer / 0.4);
+    } else if (missTimer > 0 && skin.miss && skin.miss.length > 0) {
+      activeFrames = skin.miss;
+      actionProgress = 1.0 - (missTimer / 0.3);
+    } else if (poseTimer > 0 && poseDir >= 0 && skin[dirs[poseDir]] && skin[dirs[poseDir]].length > 0) {
+      activeFrames = skin[dirs[poseDir]];
+      actionProgress = 1.0 - (poseTimer / 0.3);
+    } else if (skin.idle && skin.idle.length > 0) {
+      activeFrames = skin.idle;
+      isIdle = true;
+    }
+
+    // Pick active frame from array
+    let activeImg = null;
+    if (activeFrames.length > 0) {
+      if (this.animatedPoses && activeFrames.length > 1) {
+        if (isIdle && this.bpm > 0) {
+          // Idle dances on beat
+          const songTime = this.audio.getCurrentSongTime();
+          const beatProgress = (songTime * (this.bpm / 60)) % 1;
+          const frameIdx = Math.floor(beatProgress * activeFrames.length);
+          activeImg = activeFrames[frameIdx];
+        } else {
+          // Action steps through frames 1 to 4 smoothly
+          const frameIdx = Math.min(activeFrames.length - 1, Math.floor(actionProgress * activeFrames.length));
+          activeImg = activeFrames[frameIdx];
+        }
+      } else {
+        // Locked to Frame 1
+        activeImg = activeFrames[0];
+      }
+    }
 
     if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
+      // Automatic Horizontal Sprite Strip Detection (Option C fallback)
+      let frameCount = 1;
+      if (this.animatedPoses && activeImg.naturalWidth > activeImg.naturalHeight * 1.3) {
+        for (let n = 2; n <= 8; n++) {
+          if (activeImg.naturalWidth % n === 0) {
+            const fw = activeImg.naturalWidth / n;
+            const aspect = fw / activeImg.naturalHeight;
+            if (aspect >= 0.5 && aspect <= 1.3) {
+              frameCount = n;
+              break;
+            }
+          }
+        }
+      }
+
+      let currentFrame = 0;
+      if (frameCount > 1) {
+        if (isIdle && this.bpm > 0) {
+          const songTime = this.audio.getCurrentSongTime();
+          const beatProgress = (songTime * (this.bpm / 60)) % 1;
+          currentFrame = Math.floor(beatProgress * frameCount);
+        } else {
+          currentFrame = Math.min(frameCount - 1, Math.floor(actionProgress * frameCount));
+        }
+      }
+
+      const frameW = activeImg.naturalWidth / frameCount;
+      const frameH = activeImg.naturalHeight;
+      const sx = currentFrame * frameW;
+      const sy = 0;
+
       const maxW = 160;
       const maxH = 200;
-      const scale = Math.min(maxW / activeImg.naturalWidth, maxH / activeImg.naturalHeight);
-      const w = activeImg.naturalWidth * scale;
-      const h = activeImg.naturalHeight * scale;
+      const scale = Math.min(maxW / frameW, maxH / frameH);
+      const w = frameW * scale;
+      const h = frameH * scale;
 
-      ctx.drawImage(activeImg, -w / 2, -h, w, h);
+      ctx.drawImage(activeImg, sx, sy, frameW, frameH, -w / 2, -h, w, h);
     } else {
+      // Fallback Box
       const boxW = 100;
       const boxH = 140;
       ctx.globalAlpha = 0.85;
@@ -853,20 +967,24 @@ export class RhythmEngine {
     const limesSkin = isLimesLocal ? this.customSkins.local : this.customSkins.opponent;
     const bfSkin = isLimesLocal ? this.customSkins.opponent : this.customSkins.local;
 
+    // LEFT: Limes
     this.drawCharacter(
       ctx, 200, groundY, limesSkin,
       this.limesPoseDir, this.limesPoseTimer, this.limesMissTimer, this.limesTauntTimer,
       { active: '#55E840', idle: '#2A7A20' },
       "LIMES" + (isLimesLocal ? " (YOU)" : ""),
-      this.mirrorSprite
+      this.mirrorSprite,
+      this.limesBounceScale
     );
 
+    // RIGHT: Boyfriend (Mirrored so BF looks Left!)
     this.drawCharacter(
       ctx, 580, groundY, bfSkin,
       this.bfPoseDir, this.bfPoseTimer, this.bfMissTimer, this.bfTauntTimer,
       { active: '#38A8FF', idle: '#175294' },
       "BF" + (!isLimesLocal ? " (YOU)" : ""),
-      !this.mirrorSprite
+      !this.mirrorSprite,
+      this.bfBounceScale
     );
   }
 
